@@ -1,0 +1,1004 @@
+<!--
+    Jun 2020
+    v1.4.2 alpha 2022
+    @nimadez
+
+    # Glyph Icon
+    # Glyph-based icon maker and font-icon browser
+
+    # Features
+    - Icon Fonts: Google Material Icons, Font Awesome 5 Free/Brands
+    - Load TTF font
+    - Search icons by codepoint name
+    - 6 local storages for icon settings
+    - Record glyphs history
+    - Download PNG
+    - Clipboard base64 PNG
+    - Clipboard codepoint name (right-click)
+    - Codepoints scrapper script
+
+    # Supported Browsers
+    - Google Chrome for desktop
+
+    # History
+    Created in PyQt5 a few years back, aka Glyph-Qt,
+    Recreated in JavaScript during Covid-19 lockdowns.
+
+    # License
+    Code released under the [MIT license](https://github.com/nimadez/demo/blob/main/LICENSE).
+
+    # Credits
+    - Google Material Icons
+    - Font Awesome 5 Free/Brands
+
+    [ Code Map ]
+    01. Initialize
+    02. Canvas
+    03. Glyphs
+    04. History and Last Select
+    05. Events
+    06. Storage
+    07. Utils
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="description" content="Glyph-based icon maker application">
+    <meta name="author" content="@nimadez">
+    <title>Glyph Icon</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" rel="preload">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet" rel="preload">
+    <style>
+        html, body { user-select: none; -webkit-tap-highlight-color: transparent; } /* prevent text selection + tap highlight */
+        body { font-family: Verdana, Geneva, Tahoma, sans-serif; font-size: 11px; margin: 0; padding: 0; cursor: default; overflow-x: hidden; overflow-y: hidden; }
+        a { color: #3d4352; text-decoration: none; }
+        a:hover { color: steelblue; text-decoration: none; cursor: pointer; }
+        label { font-size: 10px; color: #888d99; vertical-align: middle; user-select: none; }
+        label.category { font-size: 10px; font-weight: bold; color: #3f4552; background: #13151a; border-radius: 5px; margin: 5px 0 5px 0; width: 100%; height: 20px; line-height: 20px; text-align: center; display:block; user-select: none; }
+        select { width: 110px; background: #2a313db7; color: silver; font-size: 11px; padding: 2px; border: solid 1px #343c49; border-radius: 3px; outline: none; vertical-align: middle; }
+        select:hover { color: steelblue; cursor: pointer; }
+        option { color: silver; background: #252931; }
+        input[type=number] { width: 48px; background: #2a313db7; color: silver; vertical-align: middle; font-size: 11px; padding: 1px; text-indent: 5px; border: solid 1px #343c49; border-radius: 3px; outline: none; }
+        input[type=number]:hover { color: steelblue; }
+        input[type=number]:disabled { filter: grayscale(); }
+        input[type=range] { width: 85px; vertical-align: middle; }
+        input[type=range]::-webkit-slider-runnable-track { background: #3f4552; border: none; border-radius: 5px; height: 5px; }
+        input[type=range]::-webkit-slider-thumb { margin-top: -5px; }
+        input[type=range]::-webkit-slider-thumb:hover { cursor: pointer; }
+        input[type=color] { width: 51px; height: 16px; vertical-align: middle; border-radius: 5px; border: solid 1px #00000000; padding: 0; background: none; outline: none; }
+        input[type=color]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 5px; border: solid 1px #343c49;}
+        input[type=color]::-webkit-color-swatch { background: #2e35414d; border: none; border-radius: 5px; }
+        input[type=color]:hover { border: solid 1px steelblue; cursor: pointer; }
+        input[type=color]:disabled { filter: grayscale(); filter: opacity(0.3); }
+        input[type=checkbox] { vertical-align: middle; }
+        input[type=text] { width: 127px; font-size: 12px; background: #2a313db7; color: silver; border: solid 1px #343c49; text-indent: 5px; border-radius: 3px; padding: 2px; outline: none; vertical-align: middle; }
+        input[type=text]::placeholder { color: #676d7a; font-size: 11px; }
+        button { width: 70px; margin-bottom: 5px; background: #353f4d; color: #bbb; font-size: 11px; font-weight: bold; border-radius: 4px; padding: 4px; border: 1px solid #161a20bd; outline: none; }
+        button:hover { background: steelblue; color: #222; cursor: pointer; }
+        button .material-icons { font-size: 13px; }
+        img { border: dotted 1px #2d323b; outline: none; }
+        canvas { z-index: 100; position: absolute; top: 50%; left: 50%; background: #ffffff05; box-shadow: 0 0 10px 0 #00000050; }
+        #topbar-menu { position: fixed; width: 100%; top: 0; left: 512px; padding: 5px; }
+        #topbar-options { position: fixed; width: 100%; top: 25px; left: 512px; padding: 5px; }
+        #content-left { position: absolute; width: 512px; height: 100%; background: #1a1d24; }
+        #content-right { position: absolute; left: 512px; height: 100%; background: #22262e; }
+        #panel-icon { position: absolute; top: 0; left: 50%; width: 512px; height: 512px; margin-left: -256px; background: #2e323a; overflow: hidden; background: #ffffff10; box-shadow: 0 0 20px 0 #00000060 inset; border-bottom: solid 1px #2d323b;
+            background-image: linear-gradient(45deg, #24282c 25%, transparent 20%), linear-gradient(-45deg, #24282c 25%, transparent 25%),
+                              linear-gradient(45deg, transparent 75%, #24282c 75%), linear-gradient(-45deg, transparent 75%, #24282c 75%);
+            background-size: 38px 38px; background-position: 0 0, 0 19px, 19px -19px, -19px 0; }
+        #panel-controls { position: absolute; top: 512px; left: 0; width: 270px; padding: 10px 0 0 15px; line-height: 20pt; color: #4b4d52; }
+        #panel-controls button { font-size: 10px; width: 60px; height: 20px; padding: 0 0 0 0; margin: 0; }
+        #panel-storage { position: absolute; top: 512px; right: 0; width: 190px; padding: 10px 20px 0 20px; }
+        #panel-history { position: absolute; top: 687px; right: 0; width: 190px; padding: 27px 20px 0 20px; }
+        #glyph-list { z-index: 50; position: relative; top: 55px; height: 95%; border-top: solid 1px #343c49; list-style-type: none; margin: 0; padding: 0; overflow-y: scroll; }
+        #glyph-list li { float: left; width: 40px; height: 40px; line-height: 40px; color: #aaaaaa; border: solid 1px #2d323b; text-align: center; }
+        #glyph-list li:hover { cursor: pointer; color: steelblue; border: solid 1px steelblue; }
+        #glyph-list li.selected { color: skyblue; border: solid 1px skyblue; }
+        #glyph-list li.searched { color: aqua; border: dotted 1px aqua; }
+        #storage-list { position: relative; list-style-type: none; margin: 0; padding: 0; margin-top: 22px; margin-left: 2px; }
+        #storage-list li { float: left; width: 50px; height: 50px; margin: 5px; border: dashed 1px #2b2f38; background: #272a31; border-radius: 3px; }
+        #storage-list li:hover { cursor: pointer; border: dotted 1px steelblue; }
+        #history-list { position: relative; list-style-type: none; margin: 0; padding: 0; height: 100px; overflow-y: scroll; }
+        #history-list li { float: left; width: 24px; height: 24px; line-height: 22px; color: #989da7; border: dotted 1px #2d323b; text-align: center; }
+        #history-list li:hover { cursor: pointer; color: steelblue; border: dotted 1px steelblue; }
+        #search-counter { z-index: 1000; width: 60px; color:#989da760; padding: 2px; font-size: 10px; position: absolute; top: 32px; left: 665px; text-align: right; display: none; user-select: none; }
+        #status { z-index: 1000; display: none; position: absolute; width: 495px; padding: 10px; text-align: center; user-select: none; }
+        #status span { background:#2e86dd8c; color: #eee; border: dashed 1px #ffffff30; font-size: 11px; padding: 3px 5px 3px 5px; border-radius: 5px; }
+        #input-size { width: 80px; }
+        #mobilewarn { z-index: 1000; display: none; background: #18c3dad8; font-weight: bold; color: black; padding: 5px 0 5px 0; border-radius: 5px; width: 200px; position: absolute; left: 50%; top: 50%; margin-left: -100px; margin-top: -25px; text-align: center; pointer-events: none; }
+        .material-icons { font-size: 24px; } /* (.material-icons) for materialicons font */
+        i { font-size: 18px; font-style: normal; font-style: normal; margin-top: -3px; pointer-events: none; vertical-align: middle; text-align: center; }
+        ::-webkit-scrollbar { width: 8px; } /* (i) for all other fonts */
+        ::-webkit-scrollbar-track { background: none; }
+        ::-webkit-scrollbar-thumb { background: #353f4d; border-radius: 8px; }
+        ::-webkit-scrollbar-thumb:hover { background: steelblue; }
+    </style>
+</head>
+<body>
+    <div id="content-left">
+        <div id="panel-icon">
+            <canvas></canvas>
+        </div>
+        <div id="panel-controls">
+            <label class="category">GLYPH</label>
+            <label>Font</label> <select id="input-font" style="width: 170px;">
+                <option value="Material Icons" selected="selected">Material Icons</option>
+                <option value="Font Awesome 5 Free">Font Awesome 5 Free</option>
+                <option value="Font Awesome 5 Brands">Font Awesome 5 Brands</option>
+                <option value="Arial">Arial</option>
+                <option value="Arial Black">Arial Black</option>
+                <option value="Webdings">Webdings</option>
+            </select>
+            <button onclick="document.getElementById('openfile').click()" title="Add Custom Font">Load TTF</button>
+            <br>
+            <label>Size</label> <input id="input-glyph-size" type="range" min="30" max="800" value="300" style="width: 230px;">
+            <br>
+            <label>Transform</label>&nbsp;&nbsp;
+            <label>°</label> <input id="input-glyph-angle" type="number" min="-180" max="180" value="0">
+            <label>X</label> <input id="input-glyph-x" type="number" min="-256" max="256" value="0">
+            <label>Y</label> <input id="input-glyph-y" type="number" min="-256" max="256" value="0">
+            <br>
+            <label>Fill</label> <input id="input-glyph-fill" type="checkbox" checked> |
+            <label>Stroke</label> <input id="input-glyph-stroke" type="checkbox">
+            <label>Width</label> <input id="input-glyph-stroke-width" type="range" min="1" max="20" value="2" style="width: 112px;">
+            <br>
+            <label>Shadow</label><input id="input-glyph-shadow" type="checkbox" checked>
+            <label>B</label> <input id="input-glyph-shadow-blur" type="number" min="0" max="200" value="0">
+            <label>X</label> <input id="input-glyph-shadow-x" type="number" min="-256" max="256" value="4">
+            <label>Y</label> <input id="input-glyph-shadow-y" type="number" min="-256" max="256" value="4">
+            <br>
+            <label>Fill</label> <input type="color" id="input-color-glyph" value="#bcc6df">
+            <label>Stroke</label> <input type="color" id="input-color-stroke" value="#15d1cb">
+            <label>Shadow</label> <input type="color" id="input-color-shadow" value="#111111">
+            <label class="category">BACKGROUND</label>
+            <label>Padding</label> <input id="input-bg-padding" type="range" min="0" max="100" value="30">&nbsp;
+            <label>Round</label> <input id="input-bg-round" type="range" min="0" max="256" value="60">
+            <br>
+            <label>Fill</label> <input id="input-bg-fill" type="checkbox" checked> |
+            <label>Stroke</label> <input id="input-bg-stroke" type="checkbox" checked>
+            <label>Width</label> <input id="input-bg-stroke-width" type="range" min="1" max="30" value="5" style="width: 117px;">
+            <br>
+            <label>Fill Style</label> <select id="input-bg-fill-style">
+                <option value="Solid">Solid</option>
+                <option value="Linear Gradient" selected="selected">Linear Gradient</option>
+                <option value="Radial Gradient">Radial Gradient</option>
+            </select>&nbsp;
+            <label>°</label> <input id="input-bg-gradient" type="range" min="0" max="359" value="90" style="width: 87px;">
+            <br>
+            <label>Fill S.</label> <input type="color" id="input-color-bg" value="#2D4B7B">
+            <label>Fill E.</label> <input type="color" id="input-color-bg1" value="#33A0FF">
+            <label>Stroke</label> <input type="color" id="input-color-bg-stroke" value="#8de2dc">
+        </div>
+        <div id="panel-storage">
+            <label class="category">STORAGE</label>
+            <ul id="storage-list"></ul>
+        </div>
+        <div id="panel-history">
+            <label class="category">HISTORY</label>
+            <ul id="history-list"></ul>
+        </div>
+    </div>
+    <div id="content-right">
+        <div id="topbar-menu">
+            <button onclick="downloadImage()" title="Download PNG">Download</button>
+            <button onclick="clipboard(canvas.toDataURL('image/png'), 'Base64 copied to clipboard')" title="Copy Base64">Base64</button>
+            <button onclick="toggleFullscreen()" title="Fullscreen"><i class="material-icons">fullscreen</i></button>
+        </div>
+        <div id="topbar-options">
+            <select id="input-size" title="Output Size">
+                <option value="512">512 x 512</option>
+                <option value="500">500 x 500</option>
+                <option value="400">400 x 400</option>
+                <option value="300">300 x 300</option>
+                <option value="256" selected="selected">256 x 256</option>
+                <option value="200">200 x 200</option>
+                <option value="192">192 x 192</option>
+                <option value="144">144 x 144</option>
+                <option value="128">128 x 128</option>
+                <option value="100">100 x 100</option>
+                <option value="96">96 x 96</option>
+                <option value="90">90 x 90</option>
+                <option value="88">88 x 88</option>
+                <option value="80">80 x 80</option>
+                <option value="72">72 x 72</option>
+                <option value="70">70 x 70</option>
+                <option value="66">66 x 66</option>
+                <option value="64">64 x 64</option>
+                <option value="60">60 x 60</option>
+                <option value="50">50 x 50</option>
+                <option value="48">48 x 48</option>
+                <option value="44">44 x 44</option>
+                <option value="40">40 x 40</option>
+                <option value="36">36 x 36</option>
+                <option value="33">33 x 33</option>
+                <option value="32">32 x 32</option>
+                <option value="30">30 x 30</option>
+                <option value="24">24 x 24</option>
+                <option value="22">22 x 22</option>
+                <option value="20">20 x 20</option>
+                <option value="16">16 x 16</option>
+            </select>
+            <input id="search-box" type="text" oninput="searchIcons(this.value)" placeholder="Search by name">
+        </div>
+        <ul id="glyph-list"></ul>
+    </div>
+    <div id="search-counter"></div>
+    <div id="status"><span></span></div>
+    <div id="mobilewarn">This app is not compatible<br>with mobile screens</div>
+    <input style="display: none" type="file" id="openfile" accept=".ttf" onclick="this.value = null">
+</body>
+<script>
+    const FONT_MATERIAL = 'Material Icons';
+    const FONT_AWESOME_FREE = 'Font Awesome 5 Free';
+    const FONT_AWESOME_BRANDS = 'Font Awesome 5 Brands';
+
+    const canvas = document.getElementsByTagName('canvas')[0];
+    const ctx = canvas.getContext("2d");
+
+    const status = document.getElementById("status").firstChild;
+    const searchCounter = document.getElementById("search-counter");
+
+    const inputSize = document.getElementById("input-size");
+    const inputFont = document.getElementById("input-font");
+    const inputGlyphSize = document.getElementById("input-glyph-size");
+    const inputGlyphFill = document.getElementById("input-glyph-fill");
+    const inputGlyphStroke = document.getElementById("input-glyph-stroke");
+    const inputGlyphStrokeWidth = document.getElementById("input-glyph-stroke-width");
+    const inputGlyphAngle = document.getElementById("input-glyph-angle");
+    const inputGlyphX = document.getElementById("input-glyph-x");
+    const inputGlyphY = document.getElementById("input-glyph-y");
+    const inputGlyphShadow = document.getElementById("input-glyph-shadow");
+    const inputGlyphShadowBlur = document.getElementById("input-glyph-shadow-blur");
+    const inputGlyphShadowX = document.getElementById("input-glyph-shadow-x");
+    const inputGlyphShadowY = document.getElementById("input-glyph-shadow-y");
+    const inputColorBg = document.getElementById('input-color-bg');
+    const inputColorBg1 = document.getElementById('input-color-bg1');
+    const inputColorBgStroke = document.getElementById('input-color-bg-stroke');
+    const inputColorGlyph = document.getElementById('input-color-glyph');
+    const inputColorStroke = document.getElementById('input-color-stroke');
+    const inputColorShadow = document.getElementById('input-color-shadow');
+    const inputBgPadding = document.getElementById("input-bg-padding");
+    const inputBgRound = document.getElementById("input-bg-round");
+    const inputBgGradient = document.getElementById("input-bg-gradient");
+    const inputBgFill = document.getElementById("input-bg-fill");
+    const inputBgFillStyle = document.getElementById("input-bg-fill-style");
+    const inputBgStroke = document.getElementById("input-bg-stroke");
+    const inputBgStrokeWidth = document.getElementById("input-bg-stroke-width");
+
+    inputGlyphStrokeWidth.disabled = true; // default startup setup
+    inputColorStroke.disabled = true;
+
+    let _glyph = 'fiber_new';
+    let _size = inputSize.options[inputSize.selectedIndex].value;
+    let _font = inputFont.options[inputFont.selectedIndex].value;
+    let _glyphSize = inputGlyphSize.value;
+    let _glyphFill = inputGlyphFill.checked;
+    let _glyphStroke = inputGlyphStroke.checked;
+    let _glyphStrokeWidth = inputGlyphStrokeWidth.value;
+    let _glyphAngle = inputGlyphAngle.value;
+    let _glyphX = inputGlyphX.value;
+    let _glyphY = inputGlyphY.value;
+    let _glyphShadow = inputGlyphShadow.checked;
+    let _glyphShadowBlur = inputGlyphShadowBlur.value;
+    let _glyphShadowX = inputGlyphShadowX.value;
+    let _glyphShadowY = inputGlyphShadowY.value;
+    let _colorBg = inputColorBg.value.toUpperCase();
+    let _colorBg1 = inputColorBg1.value.toUpperCase();
+    let _colorBgStroke = inputColorBgStroke.value.toUpperCase();
+    let _colorGlyph = inputColorGlyph.value.toUpperCase();
+    let _colorStroke = inputColorStroke.value.toUpperCase();
+    let _colorShadow = inputColorShadow.value.toUpperCase();
+    let _bgPadding = inputBgPadding.value;
+    let _bgRound = inputBgRound.value;
+    let _bgGradient = inputBgGradient.value;
+    let _bgFill = inputBgFill.checked;
+    let _bgFillStyle = inputBgFillStyle.options[inputBgFillStyle.selectedIndex].value;
+    let _bgStroke = inputBgStroke.checked;
+    let _bgStrokeWidth = inputBgStrokeWidth.value;
+
+    let materialIconsList = [];
+    let fontAwesomeListFree = [];
+    let fontAwesomeListBrands = [];
+    let lastSelect = [ // length changes when loading new font
+        { font: inputFont.options[0].value, glyph: _glyph },
+        { font: inputFont.options[1].value, glyph: 'fas fa-brain' },
+        { font: inputFont.options[2].value, glyph: 'fab fa-btc' },
+        { font: inputFont.options[3].value, glyph: 'A' },
+        { font: inputFont.options[4].value, glyph: 'A' },
+        { font: inputFont.options[5].value, glyph: '"' }
+    ];
+    let fontAwesomeUnicode_free = fontAwesomeToUnicode('fas fa-brain'); //convert to unicode for canvas fillText()
+    let fontAwesomeUnicode_brands = fontAwesomeToUnicode('fab fa-btc');
+
+    const storageHolderImage = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABu0lEQVRoQ+2ZTXKDMAxGBQRw0lN00VXvf7C0TZtQhnS8YIYh/pGlz1CYZBsjvYeEbXDx+vZ+pw3/iqfAytV7VmDlAlCwAgURDcNA/W9HdWuWZ70P1HU3atqjN7dXwMJXVUVNa+jyeaa+7xeVqMqSWnOkn+8vul2v1Bi3hFNgCj+qLykxwo+5QxIPAi74JSXm8DEJZwV8QWywnJWQ5PU+A5Jgmqdcmi84C0mDpopo8kQXMk1wjog2flTAQmiT+EQQcVkCOSQQ8JaLLYCUQMEnCyAkkPAiAY0EGl4sIJHIAa8SSJHIBa8WiEnYTVhRlmTMyTmTIrYlSbOQZD73XYOAh1RgBAy1yVwCBQ8ViLVTri05pIVGOPsuUTcNHQ61s3Ps6+Hl40zt6YWzTWKNgQpw2gjZPtAW4sDnaCNIBVLg0RJqgRD8v18HuCssdxzrqZ0NElcgFSp1PFdGJCCFkV4XkkkW0EJor5/LJAmgkqPiJK0DyKSxbUfKYseqABqeswHkSkQFcsGjJPb7ZS73nZ/PJtJ8+/s6vYvzgU2f0EzfrjZ7RjaV2OwpJXc3uPa46EK2NmAs/1Mgdody//8HAr7nQDPdWBMAAAAASUVORK5CYII=`;
+
+    
+    // -------------------------------------------------------
+    // Initialize
+
+
+    init();
+
+    function init() {
+        loadCodepoints();
+        updateGlyphs();
+
+        historyAdd(_font, _glyph);
+        createStorages();
+
+        resizeCanvas(_size);
+        animate();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        ctx.clearRect(0,0, _size,_size);
+        drawCanvas();
+    }
+
+    if (window.innerWidth < 600 || window.innerHeight < 600) {
+        document.getElementById('mobilewarn').style.display = 'unset';
+        setTimeout(()=>{document.getElementById('mobilewarn').style.display = 'none'}
+        , 6000);
+    }
+    
+
+    // -------------------------------------------------------
+    // Canvas
+
+
+    function drawCanvas() {
+        const center = _size/2;
+
+        // background
+        ctx.lineWidth = normalize(_bgStrokeWidth);
+        ctx.strokeStyle = _colorBgStroke;
+        switch (_bgFillStyle) {
+            case 'Solid':
+                ctx.fillStyle = _colorBg;
+                break;
+            case 'Linear Gradient':
+                const linear = ctx.createLinearGradient(
+                    center,center,
+                    center-(Math.cos(_bgGradient / 180 * Math.PI) * _size),
+                    center-(Math.sin(_bgGradient / 180 * Math.PI) * _size)); //x,y, x1,y1
+                linear.addColorStop(0, _colorBg);
+                linear.addColorStop(1, _colorBg1);
+                ctx.fillStyle = linear;
+                break;
+            case 'Radial Gradient':
+                const radial = ctx.createRadialGradient(center,center,0, center,center,normalize(_bgGradient)+10); //x,y,r, x1,y1,r1
+                radial.addColorStop(0, _colorBg);
+                radial.addColorStop(1, _colorBg1);
+                ctx.fillStyle = radial;
+                break;
+        }
+
+        if (_bgFill)   
+            drawRoundRect(ctx,
+                normalize(_bgPadding),normalize(_bgPadding),
+                (_size-normalize(_bgPadding))-normalize(_bgPadding),
+                (_size-normalize(_bgPadding))-normalize(_bgPadding),
+                normalize(_bgRound), true);
+        if (_bgStroke)
+            drawRoundRect(ctx,
+                normalize(_bgPadding),normalize(_bgPadding),
+                (_size-normalize(_bgPadding))-normalize(_bgPadding),
+                (_size-normalize(_bgPadding))-normalize(_bgPadding),
+                normalize(_bgRound), false);
+
+        // glyph
+        ctx.save();
+        ctx.translate(normalize(_glyphX), normalize(_glyphY)); //translate
+        ctx.translate(center, center);
+        ctx.rotate(_glyphAngle * Math.PI / 180); //rotate
+        ctx.translate(-center, -center);
+        
+        if (_glyphShadow) {
+            ctx.shadowColor = _colorShadow;
+            ctx.shadowBlur = _glyphShadowBlur;
+            ctx.shadowOffsetX = normalize(_glyphShadowX);
+            ctx.shadowOffsetY = normalize(_glyphShadowY);
+        }
+        
+        ctx.lineWidth = normalize(_glyphStrokeWidth);
+        ctx.strokeStyle = _colorStroke;
+        ctx.fillStyle = _colorGlyph;
+        if (!_glyphFill) ctx.fillStyle = 'rgba(0,0,0,0)';
+
+        if (_font == FONT_AWESOME_FREE) {
+            drawGlyph(ctx, normalize(_glyphSize), _font).fillText(fontAwesomeUnicode_free, center,center);
+        } else if (_font == FONT_AWESOME_BRANDS) {
+            drawGlyph(ctx, normalize(_glyphSize), _font).fillText(fontAwesomeUnicode_brands, center,center);
+        } else {
+            drawGlyph(ctx, normalize(_glyphSize), _font).fillText(_glyph, center,center);
+        }
+
+        if (_glyphStroke) {
+            if (_font == FONT_AWESOME_FREE) {
+                ctx.strokeText(fontAwesomeUnicode_free, center,center);
+            } else if (_font == FONT_AWESOME_BRANDS) {
+                ctx.strokeText(fontAwesomeUnicode_brands, center,center);
+            } else {
+                ctx.strokeText(_glyph, center,center);
+            }
+        }
+
+        ctx.restore();
+    }
+
+    function drawRoundRect(ctx, x, y, w, h, r, isFill) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x+w/2, y);
+        ctx.arcTo(x+w, y,   x+w, y+h, r);
+        ctx.arcTo(x+w, y+h, x,   y+h, r);
+        ctx.arcTo(x,   y+h, x,   y,   r);
+        ctx.arcTo(x,   y,   x+w, y,   r);
+        ctx.closePath();
+        if (isFill) { ctx.fill() } else { ctx.stroke() }
+        return ctx;
+    }
+
+    function drawGlyph(ctx, size, font) {
+        ctx.font = `${size}px "${font}"`;
+        if (_font == FONT_AWESOME_FREE) {
+            ctx.font = `900 ${size}px "${font}"`;
+        } else if (_font == FONT_AWESOME_BRANDS) {
+            ctx.font = `400 ${size}px "${font}"`;
+        }
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        return ctx;
+    }
+
+    function normalize(int) { // normalize to canvas size
+        return (_size * int) / 512;
+    }
+
+    function resizeCanvas(size) {
+        canvas.width = size;
+        canvas.height = size;
+        canvas.style.width = size + 'px';
+        canvas.style.height = size + 'px';
+        canvas.style.marginLeft = -size/2 + 'px';
+        canvas.style.marginTop = -size/2 + 'px';
+    }
+
+
+    // -------------------------------------------------------
+    // Glyphs
+
+
+    function updateGlyphs() {
+        createGlyphs( listGlyphs() );
+        searchClear();
+    }
+
+    function listGlyphs() {
+        let out = [];
+        if (_font == FONT_MATERIAL) {
+            out = materialIconsList;
+        } else if (_font == FONT_AWESOME_FREE) {
+            out = fontAwesomeListFree;
+        } else if (_font == FONT_AWESOME_BRANDS) {
+            out = fontAwesomeListBrands;
+        } else {
+            for (let i=0x21; i <= 0xFF+10000; i++) //0x21(33)//max:0xFFFD(65533)
+                out.push(String.fromCharCode(i));
+        }
+        return out;
+    }
+
+    function createGlyphs(lst) {
+        // html
+        const ul = document.getElementById('glyph-list');
+        ul.innerHTML = '';
+        for (let i in lst) {
+            const li = document.createElement('li');
+            li.innerHTML = `<i style="font-family:${ _font }">${ lst[i] }</i>`;
+            if (_font == FONT_MATERIAL) { li.innerHTML = `<i class="material-icons">${ lst[i] }</i>`; }
+            else if (_font == FONT_AWESOME_FREE || _font == FONT_AWESOME_BRANDS)  { li.innerHTML = `<i class="${ lst[i] }"></i>`; }
+            if (lst[i] == _glyph)
+                li.classList.add("selected");
+            li.title = lst[i];
+            ul.appendChild(li);
+        }
+        // events
+        const li = document.querySelectorAll('#glyph-list li');
+        li.forEach(function (ev) {
+            ev.addEventListener("click", function (e) {
+                e.preventDefault();
+
+                for (let i = 0; i < li.length; i++)
+                    li[i].classList.remove("selected");
+                this.classList.add("selected");
+
+                _glyph = this.firstChild.innerHTML;
+                if (_font == FONT_AWESOME_FREE) {
+                    _glyph = this.firstChild.className;
+                    fontAwesomeUnicode_free = fontAwesomeToUnicode(_glyph);
+                } else if (_font == FONT_AWESOME_BRANDS) {
+                    _glyph = this.firstChild.className;
+                    fontAwesomeUnicode_brands = fontAwesomeToUnicode(_glyph);
+                }
+
+                replaceLastSelect(_font, _glyph);
+                historyAdd(_font, _glyph);
+                searchClear();
+            });
+            ev.addEventListener("contextmenu", function (e) {
+                e.preventDefault();
+                if (_font == FONT_AWESOME_FREE || _font == FONT_AWESOME_BRANDS) {
+                    clipboard(this.firstChild.className, `'${this.firstChild.className}' copied`);
+                } else {
+                    clipboard(this.firstChild.innerHTML, `'${this.firstChild.innerHTML}' copied`);
+                }
+            }, false);
+        });
+    }
+
+
+    // -------------------------------------------------------
+    // History and Last Select
+
+    function historyAdd(font, glyph) {
+        const ul = document.getElementById('history-list');
+        const li = document.createElement('li');
+        li.title = 'Use: Click\nRemove: Right Click';
+        li.innerHTML = `<i style="font-family:${ font }; font-size:19px;">${ glyph }</i>`;
+        if (_font == FONT_AWESOME_FREE || _font == FONT_AWESOME_BRANDS)
+            li.innerHTML = `<i class="${ glyph }" style="font-family:${ font }; font-size:15px;"></i>`;
+        // use on click
+        li.addEventListener("click", function (e) {
+            e.preventDefault();
+            document.querySelector('#input-font [value="' + font + '"]').selected = true;
+            _font = font;
+            _glyph = glyph;
+            if (_font == FONT_AWESOME_FREE) {
+                fontAwesomeUnicode_free = fontAwesomeToUnicode(_glyph);
+            } else if (_font == FONT_AWESOME_BRANDS) {
+                fontAwesomeUnicode_brands = fontAwesomeToUnicode(_glyph);
+            }
+            updateGlyphs();
+            replaceLastSelect(_font, _glyph);
+        });
+        // remove on right-click
+        li.addEventListener("contextmenu", function (e) {
+            e.preventDefault();
+            ul.removeChild(li);
+            delete li;
+        });
+        ul.appendChild(li);
+    }
+
+    function replaceLastSelect(font, glyph) {
+        // replace last selected glyph
+        for (let i = 0; i < inputFont.options.length; i++) {
+            if (font == lastSelect[i].font)
+                lastSelect[i].glyph = glyph;
+        }
+    }
+
+    function restoreLastSelect(font) {
+        // restore previously selected glyph
+        for (let i in lastSelect) {
+            if (font == lastSelect[i].font)
+                _glyph = lastSelect[i].glyph;
+        }
+    }
+
+
+    // -------------------------------------------------------
+    // Events
+
+
+    inputSize.addEventListener("input", function (e) {
+        _size = this.options[this.selectedIndex].value;
+        resizeCanvas(_size);
+    }, false);
+
+    inputFont.addEventListener("input", function (e) {
+        _font = this.options[this.selectedIndex].value;
+        restoreLastSelect(_font);
+        updateGlyphs();
+    }, false);
+
+    inputGlyphSize.addEventListener("input", function (e) {
+        _glyphSize = this.value;
+    }, false);
+
+    inputGlyphFill.addEventListener("input", function (e) {
+        _glyphFill = this.checked;
+        inputColorGlyph.disabled = !this.checked;
+    }, false);
+
+    inputGlyphStroke.addEventListener("input", function (e) {
+        _glyphStroke = this.checked;
+        inputGlyphStrokeWidth.disabled = !this.checked;
+        inputColorStroke.disabled = !this.checked;
+    }, false);
+
+    inputGlyphStrokeWidth.addEventListener("input", function (e) {
+        _glyphStrokeWidth = this.value;
+    }, false);
+
+    inputGlyphAngle.addEventListener("input", function (e) {
+        _glyphAngle = this.value;
+    }, false);
+
+    inputGlyphX.addEventListener("input", function (e) {
+        _glyphX = this.value;
+    }, false);
+
+    inputGlyphY.addEventListener("input", function (e) {
+        _glyphY = this.value;
+    }, false);
+    
+    inputGlyphShadow.addEventListener("input", function (e) {
+        _glyphShadow = this.checked;
+        inputGlyphShadowBlur.disabled = !this.checked;
+        inputGlyphShadowX.disabled = !this.checked;
+        inputGlyphShadowY.disabled = !this.checked;
+        inputColorShadow.disabled = !this.checked;
+    }, false);
+
+    inputGlyphShadowBlur.addEventListener("input", function (e) {
+        _glyphShadowBlur = this.value;
+    }, false);
+
+    inputGlyphShadowX.addEventListener("input", function (e) {
+        _glyphShadowX = this.value;
+    }, false);
+
+    inputGlyphShadowY.addEventListener("input", function (e) {
+        _glyphShadowY = this.value;
+    }, false);
+
+    inputColorBg.addEventListener("input", function (e) {
+        _colorBg = this.value.toUpperCase();
+    }, false);
+
+    inputColorBg1.addEventListener("input", function (e) {
+        _colorBg1 = this.value.toUpperCase();
+    }, false);
+
+    inputColorBgStroke.addEventListener("input", function (e) {
+        _colorBgStroke = this.value.toUpperCase();
+    }, false);
+
+    inputColorGlyph.addEventListener("input", function (e) {
+        _colorGlyph = this.value.toUpperCase();
+    }, false);
+
+    inputColorStroke.addEventListener("input", function (e) {
+        _colorStroke = this.value.toUpperCase();
+    }, false);
+
+    inputColorShadow.addEventListener("input", function (e) {
+        _colorShadow = this.value.toUpperCase();
+    }, false);
+
+    inputBgPadding.addEventListener("input", function (e) {
+        _bgPadding = this.value;
+    }, false);
+
+    inputBgRound.addEventListener("input", function (e) {
+        _bgRound = this.value;
+    }, false);
+
+    inputBgGradient.addEventListener("input", function (e) {
+        _bgGradient = this.value;
+    }, false);
+
+    inputBgFill.addEventListener("input", function (e) {
+        _bgFill = this.checked;
+        inputColorBg.disabled = !this.checked;
+        inputColorBg1.disabled = !this.checked;
+        inputBgFillStyle.disabled = !this.checked;
+        inputBgGradient.disabled = !this.checked;
+    }, false);
+
+    inputBgFillStyle.addEventListener("input", function (e) {
+        _bgFillStyle = this.options[this.selectedIndex].value;
+        (this.selectedIndex == 0) ? inputBgGradient.disabled = true : inputBgGradient.disabled = false;
+        (this.selectedIndex == 0) ? inputColorBg1.disabled = true : inputColorBg1.disabled = false;
+    }, false);
+
+    inputBgStroke.addEventListener("input", function (e) {
+        _bgStroke = this.checked;
+        inputBgStrokeWidth.disabled = !this.checked;
+        inputColorBgStroke.disabled = !this.checked;
+    }, false);
+
+    inputBgStrokeWidth.addEventListener("input", function (e) {
+        _bgStrokeWidth = this.value;
+    }, false);
+
+    document.getElementById('search-box').addEventListener('focus', function(e) {
+        searchIcons(this.value);
+    }, false);
+
+    // enable mousewheel for numeric inputs
+    document.addEventListener("wheel", function (e) {}, false);
+
+    // change icon size using mousewheel
+    document.getElementById('panel-icon').addEventListener('wheel',function(e) {
+        const index = inputSize.selectedIndex; // get index of selected size
+        if (e.deltaY < 0) { // up
+            if (_size < 512) inputSize.selectedIndex = index - 1;
+        } else if (e.deltaY > 0) { // down
+            if (_size > 16)  inputSize.selectedIndex = index + 1;
+        }
+        document.querySelector('#input-size [value="' + inputSize.value + '"]').selected = true;
+        _size = inputSize.value;
+        resizeCanvas(_size);
+        return false;
+    }, { passive: false });
+
+    // load custom font
+    document.getElementById('openfile').addEventListener("change", function (ev) {
+        if (ev.target.files.length > 0) {
+            const file = ev.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function() {
+                const fontName = file.name.split('.').slice(0, -1).join('.'); //remove .ext
+
+                const fontFace = `@font-face {font-family: "${fontName}"; src: url('${reader.result}'); }`;
+                document.getElementsByTagName('style')[0].appendChild(document.createTextNode(fontFace));
+
+                const option = document.createElement("option");
+                option.text = fontName;
+                option.value = fontName;
+                inputFont.add(option);
+                inputFont.options.selectedIndex = inputFont.options.length - 1;
+
+                lastSelect.push({ font: fontName, glyph: 'A' }); // update lastSelect array
+                updateGlyphs();
+                
+                inputFont.dispatchEvent(new Event("input")); // trigger change
+            }
+            reader.readAsDataURL(file);
+        }
+    }, false);
+
+
+    // -------------------------------------------------------
+    // Storage
+
+
+    function createStorages() {
+        // html
+        const ul = document.getElementById('storage-list');
+        for (let i = 0; i < 6; i++) {
+            const li = document.createElement('li');
+            const img = document.createElement('img');
+            img.src = storageHolderImage;
+            img.width = 48;
+            img.height = 48;
+            img.id = 'storage' + i;
+            img.title = 'Use: Click\nReplace: Shift+Click\nRemove: Ctrl+Click';
+            li.appendChild(img);
+            ul.appendChild(li);
+        }
+        // events
+        const img = document.querySelectorAll('img');
+        img.forEach(function(e) {
+            e.addEventListener("click", function(ev) {
+                const storage = 'storage' + this.id + '-img';
+                if (ev.shiftKey) {
+                    this.src = canvas.toDataURL('image/png');
+                    localStorage.setItem(storage, this.src);
+                    setStorage(this.id);
+                } if (ev.ctrlKey) {
+                    this.src = storageHolderImage;
+                    localStorage.removeItem(storage);
+                } else {
+                    if (localStorage.getItem(storage) !== null) {
+                        getStorage(this.id);
+                        replaceLastSelect(_font, _glyph);
+                    }
+                }
+            });
+        });
+
+        // load storages
+        for (let i in img) {
+            const storage = localStorage.getItem('storage' + img[i].id + '-img');
+            if (storage) img[i].src = storage;
+        }
+    }
+
+    function setStorage(storageName) {
+        let data = `${_glyph},${_size},${_font},${_glyphSize},${_glyphFill},${_glyphStroke},${_glyphStrokeWidth},${_glyphAngle},${_glyphX},${_glyphY},${_glyphShadow},${_glyphShadowBlur},${_glyphShadowX},${_glyphShadowY},${_colorBg},${_colorBg1},${_colorBgStroke},${_colorGlyph},${_colorStroke},${_colorShadow},${_bgPadding},${_bgRound},${_bgGradient},${_bgFill},${_bgFillStyle},${_bgStroke},${_bgStrokeWidth}`;
+        localStorage.setItem(storageName, data);
+        data = null;
+    }
+    
+    function getStorage(storageName) {
+        let data = localStorage.getItem(storageName);
+        if (!data) return;
+        const dataList = data.split(',');
+        data = null;
+        _glyph = dataList[0];
+        document.querySelector('#input-size [value="' + parseInt(dataList[1]) + '"]').selected = true;
+        _size = parseInt(dataList[1]);
+        document.querySelector('#input-font [value="' + dataList[2] + '"]').selected = true;
+        _font = dataList[2];
+        inputGlyphSize.value = parseInt(dataList[3]);
+        _glyphSize = parseInt(dataList[3]);
+        inputGlyphFill.checked = parseBool(dataList[4]);
+        _glyphFill = parseBool(dataList[4]);
+                inputColorGlyph.disabled = !inputGlyphFill.checked;
+        inputGlyphStroke.checked = parseBool(dataList[5]);
+        _glyphStroke = parseBool(dataList[5]);
+                inputGlyphStrokeWidth.disabled = !inputGlyphStroke.checked;
+                inputColorStroke.disabled = !inputGlyphStroke.checked;
+        inputGlyphStrokeWidth.value = parseInt(dataList[6]);
+        _glyphStrokeWidth = parseInt(dataList[6]);
+        inputGlyphAngle.value = parseInt(dataList[7]);
+        _glyphAngle = parseInt(dataList[7]);
+        inputGlyphX.value = parseInt(dataList[8]);
+        _glyphX = parseInt(dataList[8]);
+        inputGlyphY.value = parseInt(dataList[9]);
+        _glyphY = parseInt(dataList[9]);
+        inputGlyphShadow.checked = parseBool(dataList[10]);
+        _glyphShadow = parseBool(dataList[10]);
+                inputGlyphShadowBlur.disabled = !inputGlyphShadow.checked;
+                inputGlyphShadowX.disabled = !inputGlyphShadow.checked;
+                inputGlyphShadowY.disabled = !inputGlyphShadow.checked;
+                inputColorShadow.disabled = !inputGlyphShadow.checked;
+        inputGlyphShadowBlur.value = parseInt(dataList[11]);
+        _glyphShadowBlur = parseInt(dataList[11]);
+        inputGlyphShadowX.value = parseInt(dataList[12]);
+        _glyphShadowX = parseInt(dataList[12]);
+        inputGlyphShadowY.value = parseInt(dataList[13]);
+        _glyphShadowY = parseInt(dataList[13]);
+        inputColorBg.value = dataList[14];
+        _colorBg = dataList[14];
+        inputColorBg1.value = dataList[15];
+        _colorBg1 = dataList[15];
+        inputColorBgStroke.value = dataList[16];
+        _colorBgStroke = dataList[16];
+        inputColorGlyph.value = dataList[17];
+        _colorGlyph = dataList[17];
+        inputColorStroke.value = dataList[18];
+        _colorStroke = dataList[18];
+        inputColorShadow.value = dataList[19];
+        _colorShadow = dataList[19];
+        inputBgPadding.value = parseInt(dataList[20]);
+        _bgPadding = parseInt(dataList[20]);
+        inputBgRound.value = parseInt(dataList[21]);
+        _bgRound = parseInt(dataList[21]);
+        inputBgGradient.value = parseInt(dataList[22]);
+        _bgGradient = parseInt(dataList[22]);
+        inputBgFill.checked = parseBool(dataList[23]);
+        _bgFill = parseBool(dataList[23]);
+                inputColorBg.disabled = !inputBgFill.checked;
+                inputColorBg1.disabled = !inputBgFill.checked;
+                inputBgFillStyle.disabled = !inputBgFill.checked;
+                inputBgGradient.disabled = !inputBgFill.checked;
+        document.querySelector('#input-bg-fill-style [value="' + dataList[24] + '"]').selected = true;
+        _bgFillStyle = dataList[24];
+                (inputBgFillStyle.selectedIndex == 0) ? inputBgGradient.disabled = true : inputBgGradient.disabled = false;
+                (inputBgFillStyle.selectedIndex == 0) ? inputColorBg1.disabled = true : inputColorBg1.disabled = false;
+        inputBgStroke.checked = parseBool(dataList[25]);
+        _bgStroke = parseBool(dataList[25]);
+                inputBgStrokeWidth.disabled = !inputBgStroke.checked;
+                inputColorBgStroke.disabled = !inputBgStroke.checked;
+        inputBgStrokeWidth.value = parseInt(dataList[26]);
+        _bgStrokeWidth = parseInt(dataList[26]);
+        updateGlyphs();
+        resizeCanvas(_size);
+    }
+
+
+    // -------------------------------------------------------
+    // Utils
+
+    
+    function fontAwesomeToUnicode(name) {
+        const i = document.createElement('i');
+        i.className = name;
+        i.style.display = 'none';
+        document.body.appendChild(i);
+        const content = window.getComputedStyle(i, ':before').getPropertyValue('content').replace(/['"]+/gu, ''); // remove ""
+        document.body.removeChild(i);
+        delete i;
+        return content;
+    }
+
+    function downloadImage() {
+        const link = document.createElement("a");
+        link.download = _glyph.replace(/ /g,"_") + '_' + _size; // name without spaces and file extension
+        link.href = canvas.toDataURL("image/png");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        delete link;
+    }
+
+    function clipboard(val, msg) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = val;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        delete input;
+        statusMessage(msg, 3000);
+    }
+
+    function searchIcons(value) {
+        searchClear();
+        value = value.toLowerCase();
+        if (value == '' || value.length < 2) { // to not select all!
+            searchCounter.style.display = 'none';
+            return;
+        }
+        let total = 0;
+        const li = document.querySelectorAll('#glyph-list li');
+        for (let i = 0; i < li.length; i++) {
+            if (_font == FONT_MATERIAL) { 
+                if (li[i].firstChild.innerHTML.includes(value)) {
+                    li[i].classList.add("searched");
+                    total++;
+                }
+            } else if (_font == FONT_AWESOME_FREE || _font == FONT_AWESOME_BRANDS) { 
+                if (li[i].firstChild.className.replace('fas ','').includes(value)) {
+                    li[i].classList.add("searched");
+                    total++;
+                }
+                if (li[i].firstChild.className.replace('fab ','').includes(value)) {
+                    li[i].classList.add("searched");
+                    total++;
+                }
+            }
+        }
+        if (total > 0) {
+            searchCounter.style.display = 'unset';
+            searchCounter.innerHTML = total + '/' + li.length;
+        } else {
+            searchCounter.style.display = 'none';
+        }
+    }
+
+    function searchClear() {
+        const li = document.querySelectorAll('#glyph-list li');
+        for (let i = 0; i < li.length; i++)
+            li[i].classList.remove("searched"); // clear search
+        searchCounter.style.display = 'none';
+    }
+
+    function statusMessage(msg, timeout) {
+        status.parentElement.style.display = 'unset';
+        status.innerHTML = msg;
+        setTimeout(function() {
+            status.parentElement.style.display = 'none';
+            status.innerHTML = '';
+        }, timeout);
+    }
+
+    function toggleFullscreen() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            document.body.requestFullscreen();
+        }
+    }
+
+    function parseBool(val) {
+        return val === true || val === "true";
+    }
+
+    function loadCodepoints() {
+        materialIconsList = ["10k","10mp","11mp","123","12mp","13mp","14mp","15mp","16mp","17mp","18_up_rating","18mp","19mp","1k","1k_plus","1x_mobiledata","20mp","21mp","22mp","23mp","24mp","2k","2k_plus","2mp","30fps","30fps_select","360","3d_rotation","3g_mobiledata","3k","3k_plus","3mp","3p","4g_mobiledata","4g_plus_mobiledata","4k","4k_plus","4mp","5g","5k","5k_plus","5mp","60fps","60fps_select","6_ft_apart","6k","6k_plus","6mp","7k","7k_plus","7mp","8k","8k_plus","8mp","9k","9k_plus","9mp","abc","ac_unit","access_alarm","access_alarms","access_time","access_time_filled","accessibility","accessibility_new","accessible","accessible_forward","account_balance","account_balance_wallet","account_box","account_circle","account_tree","ad_units","adb","add","add_a_photo","add_alarm","add_alert","add_box","add_business","add_call","add_card","add_chart","add_circle","add_circle_outline","add_comment","add_home","add_home_work","add_ic_call","add_link","add_location","add_location_alt","add_moderator","add_photo_alternate","add_reaction","add_road","add_shopping_cart","add_task","add_to_drive","add_to_home_screen","add_to_photos","add_to_queue","addchart","adf_scanner","adjust","admin_panel_settings","adobe","ads_click","agriculture","air","airline_seat_flat","airline_seat_flat_angled","airline_seat_individual_suite","airline_seat_legroom_extra","airline_seat_legroom_normal","airline_seat_legroom_reduced","airline_seat_recline_extra","airline_seat_recline_normal","airline_stops","airlines","airplane_ticket","airplanemode_active","airplanemode_inactive","airplanemode_off","airplanemode_on","airplay","airport_shuttle","alarm","alarm_add","alarm_off","alarm_on","album","align_horizontal_center","align_horizontal_left","align_horizontal_right","align_vertical_bottom","align_vertical_center","align_vertical_top","all_inbox","all_inclusive","all_out","alt_route","alternate_email","amp_stories","analytics","anchor","android","animation","announcement","aod","apartment","api","app_blocking","app_registration","app_settings_alt","app_shortcut","apple","approval","apps","apps_outage","architecture","archive","area_chart","arrow_back","arrow_back_ios","arrow_back_ios_new","arrow_circle_down","arrow_circle_left","arrow_circle_right","arrow_circle_up","arrow_downward","arrow_drop_down","arrow_drop_down_circle","arrow_drop_up","arrow_forward","arrow_forward_ios","arrow_left","arrow_outward","arrow_right","arrow_right_alt","arrow_upward","art_track","article","aspect_ratio","assessment","assignment","assignment_add","assignment_ind","assignment_late","assignment_return","assignment_returned","assignment_turned_in","assist_walker","assistant","assistant_direction","assistant_navigation","assistant_photo","assured_workload","atm","attach_email","attach_file","attach_money","attachment","attractions","attribution","audio_file","audiotrack","auto_awesome","auto_awesome_mosaic","auto_awesome_motion","auto_delete","auto_fix_high","auto_fix_normal","auto_fix_off","auto_graph","auto_mode","auto_stories","autofps_select","autorenew","av_timer","baby_changing_station","back_hand","backpack","backspace","backup","backup_table","badge","bakery_dining","balance","balcony","ballot","bar_chart","barcode_reader","batch_prediction","bathroom","bathtub","battery_0_bar","battery_1_bar","battery_2_bar","battery_3_bar","battery_4_bar","battery_5_bar","battery_6_bar","battery_alert","battery_charging_full","battery_full","battery_saver","battery_std","battery_unknown","beach_access","bed","bedroom_baby","bedroom_child","bedroom_parent","bedtime","bedtime_off","beenhere","bento","bike_scooter","biotech","blender","blind","blinds","blinds_closed","block","block_flipped","bloodtype","bluetooth","bluetooth_audio","bluetooth_connected","bluetooth_disabled","bluetooth_drive","bluetooth_searching","blur_circular","blur_linear","blur_off","blur_on","bolt","book","book_online","bookmark","bookmark_add","bookmark_added","bookmark_border","bookmark_outline","bookmark_remove","bookmarks","border_all","border_bottom","border_clear","border_color","border_horizontal","border_inner","border_left","border_outer","border_right","border_style","border_top","border_vertical","boy","branding_watermark","breakfast_dining","brightness_1","brightness_2","brightness_3","brightness_4","brightness_5","brightness_6","brightness_7","brightness_auto","brightness_high","brightness_low","brightness_medium","broadcast_on_home","broadcast_on_personal","broken_image","browse_gallery","browser_not_supported","browser_updated","brunch_dining","brush","bubble_chart","bug_report","build","build_circle","bungalow","burst_mode","bus_alert","business","business_center","cabin","cable","cached","cake","calculate","calendar_month","calendar_today","calendar_view_day","calendar_view_month","calendar_view_week","call","call_end","call_made","call_merge","call_missed","call_missed_outgoing","call_received","call_split","call_to_action","camera","camera_alt","camera_enhance","camera_front","camera_indoor","camera_outdoor","camera_rear","camera_roll","cameraswitch","campaign","cancel","cancel_presentation","cancel_schedule_send","candlestick_chart","car_crash","car_rental","car_repair","card_giftcard","card_membership","card_travel","carpenter","cases","casino","cast","cast_connected","cast_for_education","castle","catching_pokemon","category","celebration","cell_tower","cell_wifi","center_focus_strong","center_focus_weak","chair","chair_alt","chalet","change_circle","change_history","charging_station","chat","chat_bubble","chat_bubble_outline","check","check_box","check_box_outline_blank","check_circle","check_circle_outline","checklist","checklist_rtl","checkroom","chevron_left","chevron_right","child_care","child_friendly","chrome_reader_mode","church","circle","circle_notifications","class","clean_hands","cleaning_services","clear","clear_all","close","close_fullscreen","closed_caption","closed_caption_disabled","closed_caption_off","cloud","cloud_circle","cloud_done","cloud_download","cloud_off","cloud_queue","cloud_sync","cloud_upload","cloudy_snowing","co2","co_present","code","code_off","coffee","coffee_maker","collections","collections_bookmark","color_lens","colorize","comment","comment_bank","comments_disabled","commit","commute","compare","compare_arrows","compass_calibration","compost","compress","computer","confirmation_num","confirmation_number","connect_without_contact","connected_tv","connecting_airports","construction","contact_emergency","contact_mail","contact_page","contact_phone","contact_support","contactless","contacts","content_copy","content_cut","content_paste","content_paste_go","content_paste_off","content_paste_search","contrast","control_camera","control_point","control_point_duplicate","conveyor_belt","cookie","copy_all","copyright","coronavirus","corporate_fare","cottage","countertops","create","create_new_folder","credit_card","credit_card_off","credit_score","crib","crisis_alert","crop","crop_16_9","crop_3_2","crop_5_4","crop_7_5","crop_din","crop_free","crop_landscape","crop_original","crop_portrait","crop_rotate","crop_square","cruelty_free","css","currency_bitcoin","currency_exchange","currency_franc","currency_lira","currency_pound","currency_ruble","currency_rupee","currency_yen","currency_yuan","curtains","curtains_closed","cyclone","dangerous","dark_mode","dashboard","dashboard_customize","data_array","data_exploration","data_object","data_saver_off","data_saver_on","data_thresholding","data_usage","dataset","dataset_linked","date_range","deblur","deck","dehaze","delete","delete_forever","delete_outline","delete_sweep","delivery_dining","density_large","density_medium","density_small","departure_board","description","deselect","design_services","desk","desktop_access_disabled","desktop_mac","desktop_windows","details","developer_board","developer_board_off","developer_mode","device_hub","device_thermostat","device_unknown","devices","devices_fold","devices_other","dew_point","dialer_sip","dialpad","diamond","difference","dining","dinner_dining","directions","directions_bike","directions_boat","directions_boat_filled","directions_bus","directions_bus_filled","directions_car","directions_car_filled","directions_ferry","directions_off","directions_railway","directions_railway_filled","directions_run","directions_subway","directions_subway_filled","directions_train","directions_transit","directions_transit_filled","directions_walk","dirty_lens","disabled_by_default","disabled_visible","disc_full","discord","discount","display_settings","diversity_1","diversity_2","diversity_3","dnd_forwardslash","dns","do_disturb","do_disturb_alt","do_disturb_off","do_disturb_on","do_not_disturb","do_not_disturb_alt","do_not_disturb_off","do_not_disturb_on","do_not_disturb_on_total_silence","do_not_step","do_not_touch","dock","document_scanner","domain","domain_add","domain_disabled","domain_verification","done","done_all","done_outline","donut_large","donut_small","door_back","door_front","door_sliding","doorbell","double_arrow","downhill_skiing","download","download_done","download_for_offline","downloading","drafts","drag_handle","drag_indicator","draw","drive_eta","drive_file_move","drive_file_move_outline","drive_file_move_rtl","drive_file_rename_outline","drive_folder_upload","dry","dry_cleaning","duo","dvr","dynamic_feed","dynamic_form","e_mobiledata","earbuds","earbuds_battery","east","eco","edgesensor_high","edgesensor_low","edit","edit_attributes","edit_calendar","edit_document","edit_location","edit_location_alt","edit_note","edit_notifications","edit_off","edit_road","edit_square","egg","egg_alt","eject","elderly","elderly_woman","electric_bike","electric_bolt","electric_car","electric_meter","electric_moped","electric_rickshaw","electric_scooter","electrical_services","elevator","email","emergency","emergency_recording","emergency_share","emoji_emotions","emoji_events","emoji_flags","emoji_food_beverage","emoji_nature","emoji_objects","emoji_people","emoji_symbols","emoji_transportation","energy_savings_leaf","engineering","enhance_photo_translate","enhanced_encryption","equalizer","error","error_outline","escalator","escalator_warning","euro","euro_symbol","ev_station","event","event_available","event_busy","event_note","event_repeat","event_seat","exit_to_app","expand","expand_circle_down","expand_less","expand_more","explicit","explore","explore_off","exposure","exposure_minus_1","exposure_minus_2","exposure_neg_1","exposure_neg_2","exposure_plus_1","exposure_plus_2","exposure_zero","extension","extension_off","face","face_2","face_3","face_4","face_5","face_6","face_retouching_natural","face_retouching_off","facebook","fact_check","factory","family_restroom","fast_forward","fast_rewind","fastfood","favorite","favorite_border","favorite_outline","fax","featured_play_list","featured_video","feed","feedback","female","fence","festival","fiber_dvr","fiber_manual_record","fiber_new","fiber_pin","fiber_smart_record","file_copy","file_download","file_download_done","file_download_off","file_open","file_present","file_upload","file_upload_off","filter","filter_1","filter_2","filter_3","filter_4","filter_5","filter_6","filter_7","filter_8","filter_9","filter_9_plus","filter_alt","filter_alt_off","filter_b_and_w","filter_center_focus","filter_drama","filter_frames","filter_hdr","filter_list","filter_list_alt","filter_list_off","filter_none","filter_tilt_shift","filter_vintage","find_in_page","find_replace","fingerprint","fire_extinguisher","fire_hydrant","fire_hydrant_alt","fire_truck","fireplace","first_page","fit_screen","fitbit","fitness_center","flag","flag_circle","flaky","flare","flash_auto","flash_off","flash_on","flashlight_off","flashlight_on","flatware","flight","flight_class","flight_land","flight_takeoff","flip","flip_camera_android","flip_camera_ios","flip_to_back","flip_to_front","flood","flourescent","flourescent","fluorescent","flutter_dash","fmd_bad","fmd_good","foggy","folder","folder_copy","folder_delete","folder_off","folder_open","folder_shared","folder_special","folder_zip","follow_the_signs","font_download","font_download_off","food_bank","forest","fork_left","fork_right","forklift","format_align_center","format_align_justify","format_align_left","format_align_right","format_bold","format_clear","format_color_fill","format_color_reset","format_color_text","format_indent_decrease","format_indent_increase","format_italic","format_line_spacing","format_list_bulleted","format_list_bulleted_add","format_list_numbered","format_list_numbered_rtl","format_overline","format_paint","format_quote","format_shapes","format_size","format_strikethrough","format_textdirection_l_to_r","format_textdirection_r_to_l","format_underline","format_underlined","fort","forum","forward","forward_10","forward_30","forward_5","forward_to_inbox","foundation","free_breakfast","free_cancellation","front_hand","front_loader","fullscreen","fullscreen_exit","functions","g_mobiledata","g_translate","gamepad","games","garage","gas_meter","gavel","generating_tokens","gesture","get_app","gif","gif_box","girl","gite","goat","golf_course","gpp_bad","gpp_good","gpp_maybe","gps_fixed","gps_not_fixed","gps_off","grade","gradient","grading","grain","graphic_eq","grass","grid_3x3","grid_4x4","grid_goldenratio","grid_off","grid_on","grid_view","group","group_add","group_off","group_remove","group_work","groups","groups_2","groups_3","h_mobiledata","h_plus_mobiledata","hail","handshake","handyman","hardware","hd","hdr_auto","hdr_auto_select","hdr_enhanced_select","hdr_off","hdr_off_select","hdr_on","hdr_on_select","hdr_plus","hdr_strong","hdr_weak","headphones","headphones_battery","headset","headset_mic","headset_off","healing","health_and_safety","hearing","hearing_disabled","heart_broken","heat_pump","height","help","help_center","help_outline","hevc","hexagon","hide_image","hide_source","high_quality","highlight","highlight_alt","highlight_off","highlight_remove","hiking","history","history_edu","history_toggle_off","hive","hls","hls_off","holiday_village","home","home_filled","home_max","home_mini","home_repair_service","home_work","horizontal_distribute","horizontal_rule","horizontal_split","hot_tub","hotel","hotel_class","hourglass_bottom","hourglass_disabled","hourglass_empty","hourglass_full","hourglass_top","house","house_siding","houseboat","how_to_reg","how_to_vote","html","http","https","hub","hvac","ice_skating","icecream","image","image_aspect_ratio","image_not_supported","image_search","imagesearch_roller","import_contacts","import_export","important_devices","inbox","incomplete_circle","indeterminate_check_box","info","info_outline","input","insert_chart","insert_chart_outlined","insert_comment","insert_drive_file","insert_emoticon","insert_invitation","insert_link","insert_page_break","insert_photo","insights","install_desktop","install_mobile","integration_instructions","interests","interpreter_mode","inventory","inventory_2","invert_colors","invert_colors_off","invert_colors_on","ios_share","iron","iso","javascript","join_full","join_inner","join_left","join_right","kayaking","kebab_dining","key","key_off","keyboard","keyboard_alt","keyboard_arrow_down","keyboard_arrow_left","keyboard_arrow_right","keyboard_arrow_up","keyboard_backspace","keyboard_capslock","keyboard_command","keyboard_command_key","keyboard_control","keyboard_control_key","keyboard_double_arrow_down","keyboard_double_arrow_left","keyboard_double_arrow_right","keyboard_double_arrow_up","keyboard_hide","keyboard_option","keyboard_option_key","keyboard_return","keyboard_tab","keyboard_voice","king_bed","kitchen","kitesurfing","label","label_important","label_important_outline","label_off","label_outline","lan","landscape","landslide","language","laptop","laptop_chromebook","laptop_mac","laptop_windows","last_page","launch","layers","layers_clear","leaderboard","leak_add","leak_remove","leave_bags_at_home","legend_toggle","lens","lens_blur","library_add","library_add_check","library_books","library_music","light","light_mode","lightbulb","lightbulb_circle","lightbulb_outline","line_axis","line_style","line_weight","linear_scale","link","link_off","linked_camera","liquor","list","list_alt","live_help","live_tv","living","local_activity","local_airport","local_atm","local_attraction","local_bar","local_cafe","local_car_wash","local_convenience_store","local_dining","local_drink","local_fire_department","local_florist","local_gas_station","local_grocery_store","local_hospital","local_hotel","local_laundry_service","local_library","local_mall","local_movies","local_offer","local_parking","local_pharmacy","local_phone","local_pizza","local_play","local_police","local_post_office","local_print_shop","local_printshop","local_restaurant","local_see","local_shipping","local_taxi","location_city","location_disabled","location_history","location_off","location_on","location_pin","location_searching","lock","lock_clock","lock_open","lock_outline","lock_person","lock_reset","login","logo_dev","logout","looks","looks_3","looks_4","looks_5","looks_6","looks_one","looks_two","loop","loupe","low_priority","loyalty","lte_mobiledata","lte_plus_mobiledata","luggage","lunch_dining","lyrics","macro_off","mail","mail_lock","mail_outline","male","man","man_2","man_3","man_4","manage_accounts","manage_history","manage_search","map","maps_home_work","maps_ugc","margin","mark_as_unread","mark_chat_read","mark_chat_unread","mark_email_read","mark_email_unread","mark_unread_chat_alt","markunread","markunread_mailbox","masks","maximize","media_bluetooth_off","media_bluetooth_on","mediation","medical_information","medical_services","medication","medication_liquid","meeting_room","memory","menu","menu_book","menu_open","merge","merge_type","message","messenger","messenger_outline","mic","mic_external_off","mic_external_on","mic_none","mic_off","microwave","military_tech","minimize","minor_crash","miscellaneous_services","missed_video_call","mms","mobile_friendly","mobile_off","mobile_screen_share","mobiledata_off","mode","mode_comment","mode_edit","mode_edit_outline","mode_fan_off","mode_night","mode_of_travel","mode_standby","model_training","monetization_on","money","money_off","money_off_csred","monitor","monitor_heart","monitor_weight","monochrome_photos","mood","mood_bad","moped","more","more_horiz","more_time","more_vert","mosque","motion_photos_auto","motion_photos_off","motion_photos_on","motion_photos_pause","motion_photos_paused","motorcycle","mouse","move_down","move_to_inbox","move_up","movie","movie_creation","movie_edit","movie_filter","moving","mp","multiline_chart","multiple_stop","multitrack_audio","museum","music_note","music_off","music_video","my_library_add","my_library_books","my_library_music","my_location","nat","nature","nature_people","navigate_before","navigate_next","navigation","near_me","near_me_disabled","nearby_error","nearby_off","nest_cam_wired_stand","network_cell","network_check","network_locked","network_ping","network_wifi","network_wifi_1_bar","network_wifi_2_bar","network_wifi_3_bar","new_label","new_releases","newspaper","next_plan","next_week","nfc","night_shelter","nightlife","nightlight","nightlight_round","nights_stay","no_accounts","no_adult_content","no_backpack","no_cell","no_crash","no_drinks","no_encryption","no_encryption_gmailerrorred","no_flash","no_food","no_luggage","no_meals","no_meals_ouline","no_meeting_room","no_photography","no_sim","no_stroller","no_transfer","noise_aware","noise_control_off","nordic_walking","north","north_east","north_west","not_accessible","not_interested","not_listed_location","not_started","note","note_add","note_alt","notes","notification_add","notification_important","notifications","notifications_active","notifications_none","notifications_off","notifications_on","notifications_paused","now_wallpaper","now_widgets","numbers","offline_bolt","offline_pin","offline_share","oil_barrel","on_device_training","ondemand_video","online_prediction","opacity","open_in_browser","open_in_full","open_in_new","open_in_new_off","open_with","other_houses","outbond","outbound","outbox","outdoor_grill","outgoing_mail","outlet","outlined_flag","output","padding","pages","pageview","paid","palette","pallet","pan_tool","pan_tool_alt","panorama","panorama_fish_eye","panorama_fisheye","panorama_horizontal","panorama_horizontal_select","panorama_photosphere","panorama_photosphere_select","panorama_vertical","panorama_vertical_select","panorama_wide_angle","panorama_wide_angle_select","paragliding","park","party_mode","password","pattern","pause","pause_circle","pause_circle_filled","pause_circle_outline","pause_presentation","payment","payments","paypal","pedal_bike","pending","pending_actions","pentagon","people","people_alt","people_outline","percent","perm_camera_mic","perm_contact_cal","perm_contact_calendar","perm_data_setting","perm_device_info","perm_device_information","perm_identity","perm_media","perm_phone_msg","perm_scan_wifi","person","person_2","person_3","person_4","person_add","person_add_alt","person_add_alt_1","person_add_disabled","person_off","person_outline","person_pin","person_pin_circle","person_remove","person_remove_alt_1","person_search","personal_injury","personal_video","pest_control","pest_control_rodent","pets","phishing","phone","phone_android","phone_bluetooth_speaker","phone_callback","phone_disabled","phone_enabled","phone_forwarded","phone_in_talk","phone_iphone","phone_locked","phone_missed","phone_paused","phonelink","phonelink_erase","phonelink_lock","phonelink_off","phonelink_ring","phonelink_setup","photo","photo_album","photo_camera","photo_camera_back","photo_camera_front","photo_filter","photo_library","photo_size_select_actual","photo_size_select_large","photo_size_select_small","php","piano","piano_off","picture_as_pdf","picture_in_picture","picture_in_picture_alt","pie_chart","pie_chart_outline","pie_chart_outlined","pin","pin_drop","pin_end","pin_invoke","pinch","pivot_table_chart","pix","place","plagiarism","play_arrow","play_circle","play_circle_fill","play_circle_filled","play_circle_outline","play_disabled","play_for_work","play_lesson","playlist_add","playlist_add_check","playlist_add_check_circle","playlist_add_circle","playlist_play","playlist_remove","plumbing","plus_one","podcasts","point_of_sale","policy","poll","polyline","polymer","pool","portable_wifi_off","portrait","post_add","power","power_input","power_off","power_settings_new","precision_manufacturing","pregnant_woman","present_to_all","preview","price_change","price_check","print","print_disabled","priority_high","privacy_tip","private_connectivity","production_quantity_limits","propane","propane_tank","psychology","psychology_alt","public","public_off","publish","published_with_changes","punch_clock","push_pin","qr_code","qr_code_2","qr_code_scanner","query_builder","query_stats","question_answer","question_mark","queue","queue_music","queue_play_next","quick_contacts_dialer","quick_contacts_mail","quickreply","quiz","quora","r_mobiledata","radar","radio","radio_button_checked","radio_button_off","radio_button_on","radio_button_unchecked","railway_alert","ramen_dining","ramp_left","ramp_right","rate_review","raw_off","raw_on","read_more","real_estate_agent","rebase_edit","receipt","receipt_long","recent_actors","recommend","record_voice_over","rectangle","recycling","reddit","redeem","redo","reduce_capacity","refresh","remember_me","remove","remove_circle","remove_circle_outline","remove_done","remove_from_queue","remove_moderator","remove_red_eye","remove_road","remove_shopping_cart","reorder","repartition","repeat","repeat_on","repeat_one","repeat_one_on","replay","replay_10","replay_30","replay_5","replay_circle_filled","reply","reply_all","report","report_gmailerrorred","report_off","report_problem","request_page","request_quote","reset_tv","restart_alt","restaurant","restaurant_menu","restore","restore_from_trash","restore_page","reviews","rice_bowl","ring_volume","rocket","rocket_launch","roller_shades","roller_shades_closed","roller_skating","roofing","room","room_preferences","room_service","rotate_90_degrees_ccw","rotate_90_degrees_cw","rotate_left","rotate_right","roundabout_left","roundabout_right","rounded_corner","route","router","rowing","rss_feed","rsvp","rtt","rule","rule_folder","run_circle","running_with_errors","rv_hookup","safety_check","safety_divider","sailing","sanitizer","satellite","satellite_alt","save","save_alt","save_as","saved_search","savings","scale","scanner","scatter_plot","schedule","schedule_send","schema","school","science","score","scoreboard","screen_lock_landscape","screen_lock_portrait","screen_lock_rotation","screen_rotation","screen_rotation_alt","screen_search_desktop","screen_share","screenshot","screenshot_monitor","scuba_diving","sd","sd_card","sd_card_alert","sd_storage","search","search_off","security","security_update","security_update_good","security_update_warning","segment","select_all","self_improvement","sell","send","send_and_archive","send_time_extension","send_to_mobile","sensor_door","sensor_occupied","sensor_window","sensors","sensors_off","sentiment_dissatisfied","sentiment_neutral","sentiment_satisfied","sentiment_satisfied_alt","sentiment_very_dissatisfied","sentiment_very_satisfied","set_meal","settings","settings_accessibility","settings_applications","settings_backup_restore","settings_bluetooth","settings_brightness","settings_cell","settings_display","settings_ethernet","settings_input_antenna","settings_input_component","settings_input_composite","settings_input_hdmi","settings_input_svideo","settings_overscan","settings_phone","settings_power","settings_remote","settings_suggest","settings_system_daydream","settings_voice","severe_cold","shape_line","share","share_arrival_time","share_location","shelves","shield","shield_moon","shop","shop_2","shop_two","shopify","shopping_bag","shopping_basket","shopping_cart","shopping_cart_checkout","short_text","shortcut","show_chart","shower","shuffle","shuffle_on","shutter_speed","sick","sign_language","signal_cellular_0_bar","signal_cellular_4_bar","signal_cellular_alt","signal_cellular_alt_1_bar","signal_cellular_alt_2_bar","signal_cellular_connected_no_internet_0_bar","signal_cellular_connected_no_internet_4_bar","signal_cellular_no_sim","signal_cellular_nodata","signal_cellular_null","signal_cellular_off","signal_wifi_0_bar","signal_wifi_4_bar","signal_wifi_4_bar_lock","signal_wifi_bad","signal_wifi_connected_no_internet_4","signal_wifi_off","signal_wifi_statusbar_4_bar","signal_wifi_statusbar_connected_no_internet_4","signal_wifi_statusbar_null","signpost","sim_card","sim_card_alert","sim_card_download","single_bed","sip","skateboarding","skip_next","skip_previous","sledding","slideshow","slow_motion_video","smart_button","smart_display","smart_screen","smart_toy","smartphone","smoke_free","smoking_rooms","sms","sms_failed","snapchat","snippet_folder","snooze","snowboarding","snowing","snowmobile","snowshoeing","soap","social_distance","solar_power","sort","sort_by_alpha","sos","soup_kitchen","source","south","south_america","south_east","south_west","spa","space_bar","space_dashboard","spatial_audio","spatial_audio_off","spatial_tracking","speaker","speaker_group","speaker_notes","speaker_notes_off","speaker_phone","speed","spellcheck","splitscreen","spoke","sports","sports_bar","sports_baseball","sports_basketball","sports_cricket","sports_esports","sports_football","sports_golf","sports_gymnastics","sports_handball","sports_hockey","sports_kabaddi","sports_martial_arts","sports_mma","sports_motorsports","sports_rugby","sports_score","sports_soccer","sports_tennis","sports_volleyball","square","square_foot","ssid_chart","stacked_bar_chart","stacked_line_chart","stadium","stairs","star","star_border","star_border_purple500","star_half","star_outline","star_purple500","star_rate","stars","start","stay_current_landscape","stay_current_portrait","stay_primary_landscape","stay_primary_portrait","sticky_note_2","stop","stop_circle","stop_screen_share","storage","store","store_mall_directory","storefront","storm","straight","straighten","stream","streetview","strikethrough_s","stroller","style","subdirectory_arrow_left","subdirectory_arrow_right","subject","subscript","subscriptions","subtitles","subtitles_off","subway","summarize","sunny","sunny_snowing","superscript","supervised_user_circle","supervisor_account","support","support_agent","surfing","surround_sound","swap_calls","swap_horiz","swap_horizontal_circle","swap_vert","swap_vert_circle","swap_vertical_circle","swipe","swipe_down","swipe_down_alt","swipe_left","swipe_left_alt","swipe_right","swipe_right_alt","swipe_up","swipe_up_alt","swipe_vertical","switch_access_shortcut","switch_access_shortcut_add","switch_account","switch_camera","switch_left","switch_right","switch_video","synagogue","sync","sync_alt","sync_disabled","sync_lock","sync_problem","system_security_update","system_security_update_good","system_security_update_warning","system_update","system_update_alt","system_update_tv","tab","tab_unselected","table_bar","table_chart","table_restaurant","table_rows","table_view","tablet","tablet_android","tablet_mac","tag","tag_faces","takeout_dining","tap_and_play","tapas","task","task_alt","taxi_alert","telegram","temple_buddhist","temple_hindu","terminal","terrain","text_decrease","text_fields","text_format","text_increase","text_rotate_up","text_rotate_vertical","text_rotation_angledown","text_rotation_angleup","text_rotation_down","text_rotation_none","text_snippet","textsms","texture","theater_comedy","theaters","thermostat","thermostat_auto","thumb_down","thumb_down_alt","thumb_down_off_alt","thumb_up","thumb_up_alt","thumb_up_off_alt","thumbs_up_down","thunderstorm","tiktok","time_to_leave","timelapse","timeline","timer","timer_10","timer_10_select","timer_3","timer_3_select","timer_off","tips_and_updates","tire_repair","title","toc","today","toggle_off","toggle_on","token","toll","tonality","topic","tornado","touch_app","tour","toys","track_changes","traffic","train","tram","transcribe","transfer_within_a_station","transform","transgender","transit_enterexit","translate","travel_explore","trending_down","trending_flat","trending_neutral","trending_up","trip_origin","trolley","troubleshoot","try","tsunami","tty","tune","tungsten","turn_left","turn_right","turn_sharp_left","turn_sharp_right","turn_slight_left","turn_slight_right","turned_in","turned_in_not","tv","tv_off","two_wheeler","type_specimen","u_turn_left","u_turn_right","umbrella","unarchive","undo","unfold_less","unfold_less_double","unfold_more","unfold_more_double","unpublished","unsubscribe","upcoming","update","update_disabled","upgrade","upload","upload_file","usb","usb_off","vaccines","vape_free","vaping_rooms","verified","verified_user","vertical_align_bottom","vertical_align_center","vertical_align_top","vertical_distribute","vertical_shades","vertical_shades_closed","vertical_split","vibration","video_call","video_camera_back","video_camera_front","video_chat","video_collection","video_file","video_label","video_library","video_settings","video_stable","videocam","videocam_off","videogame_asset","videogame_asset_off","view_agenda","view_array","view_carousel","view_column","view_comfortable","view_comfy","view_comfy_alt","view_compact","view_compact_alt","view_cozy","view_day","view_headline","view_in_ar","view_kanban","view_list","view_module","view_quilt","view_sidebar","view_stream","view_timeline","view_week","vignette","villa","visibility","visibility_off","voice_chat","voice_over_off","voicemail","volcano","volume_down","volume_down_alt","volume_mute","volume_off","volume_up","volunteer_activism","vpn_key","vpn_key_off","vpn_lock","vrpano","wallet","wallet_giftcard","wallet_membership","wallet_travel","wallpaper","warehouse","warning","warning_amber","wash","watch","watch_later","watch_off","water","water_damage","water_drop","waterfall_chart","waves","waving_hand","wb_auto","wb_cloudy","wb_incandescent","wb_iridescent","wb_shade","wb_sunny","wb_twighlight","wb_twilight","wc","web","web_asset","web_asset_off","web_stories","webhook","wechat","weekend","west","whatshot","wheelchair_pickup","where_to_vote","widgets","width_full","width_normal","width_wide","wifi","wifi_1_bar","wifi_2_bar","wifi_calling","wifi_calling_3","wifi_channel","wifi_find","wifi_lock","wifi_off","wifi_password","wifi_protected_setup","wifi_tethering","wifi_tethering_error","wifi_tethering_error_rounded","wifi_tethering_off","wind_power","window","wine_bar","woman","woman_2","woo_commerce","wordpress","work","work_history","work_off","work_outline","workspace_premium","workspaces","workspaces_filled","workspaces_outline","wrap_text","wrong_location","wysiwyg","yard","youtube_searched_for","zoom_in","zoom_in_map","zoom_out","zoom_out_map"];
+        fontAwesomeListFree = ["fas fa-ad","fas fa-adjust","fas fa-air-freshener","fas fa-align-center","fas fa-align-justify","fas fa-align-left","fas fa-align-right","fas fa-allergies","fas fa-ambulance","fas fa-american-sign-language-interpreting","fas fa-anchor","fas fa-angle-double-down","fas fa-angle-double-left","fas fa-angle-double-right","fas fa-angle-double-up","fas fa-angle-down","fas fa-angle-left","fas fa-angle-right","fas fa-angle-up","fas fa-ankh","fas fa-apple-alt","fas fa-archive","fas fa-archway","fas fa-arrow-circle-down","fas fa-arrow-circle-left","fas fa-arrow-circle-right","fas fa-arrow-circle-up","fas fa-arrow-down","fas fa-arrow-left","fas fa-arrow-right","fas fa-arrow-up","fas fa-arrows-alt","fas fa-arrows-alt-h","fas fa-arrows-alt-v","fas fa-assistive-listening-systems","fas fa-asterisk","fas fa-at","fas fa-atlas","fas fa-atom","fas fa-audio-description","fas fa-award","fas fa-baby","fas fa-baby-carriage","fas fa-backspace","fas fa-backward","fas fa-bacon","fas fa-bacteria","fas fa-bacterium","fas fa-bahai","fas fa-balance-scale","fas fa-balance-scale-left","fas fa-balance-scale-right","fas fa-ban","fas fa-band-aid","fas fa-barcode","fas fa-bars","fas fa-baseball-ball","fas fa-basketball-ball","fas fa-bath","fas fa-battery-empty","fas fa-battery-full","fas fa-battery-half","fas fa-battery-quarter","fas fa-battery-three-quarters","fas fa-bed","fas fa-beer","fas fa-bezier-curve","fas fa-bible","fas fa-bicycle","fas fa-biking","fas fa-binoculars","fas fa-biohazard","fas fa-birthday-cake","fas fa-blender","fas fa-blender-phone","fas fa-blind","fas fa-blog","fas fa-bold","fas fa-bolt","fas fa-bomb","fas fa-bone","fas fa-bong","fas fa-book","fas fa-book-dead","fas fa-book-medical","fas fa-book-open","fas fa-book-reader","fas fa-border-all","fas fa-border-none","fas fa-border-style","fas fa-bowling-ball","fas fa-box","fas fa-box-open","fas fa-box-tissue","fas fa-boxes","fas fa-braille","fas fa-brain","fas fa-bread-slice","fas fa-briefcase","fas fa-briefcase-medical","fas fa-broadcast-tower","fas fa-broom","fas fa-brush","fas fa-bug","fas fa-bullhorn","fas fa-bullseye","fas fa-burn","fas fa-bus","fas fa-bus-alt","fas fa-business-time","fas fa-calculator","fas fa-calendar-day","fas fa-calendar-week","fas fa-camera","fas fa-camera-retro","fas fa-campground","fas fa-candy-cane","fas fa-cannabis","fas fa-capsules","fas fa-car","fas fa-car-alt","fas fa-car-battery","fas fa-car-crash","fas fa-car-side","fas fa-caravan","fas fa-caret-down","fas fa-caret-left","fas fa-caret-right","fas fa-caret-up","fas fa-carrot","fas fa-cart-arrow-down","fas fa-cart-plus","fas fa-cash-register","fas fa-cat","fas fa-certificate","fas fa-chair","fas fa-chalkboard","fas fa-chalkboard-teacher","fas fa-charging-station","fas fa-chart-area","fas fa-chart-line","fas fa-chart-pie","fas fa-check","fas fa-check-double","fas fa-cheese","fas fa-chess","fas fa-chess-bishop","fas fa-chess-board","fas fa-chess-king","fas fa-chess-knight","fas fa-chess-pawn","fas fa-chess-queen","fas fa-chess-rook","fas fa-chevron-circle-down","fas fa-chevron-circle-left","fas fa-chevron-circle-right","fas fa-chevron-circle-up","fas fa-chevron-down","fas fa-chevron-left","fas fa-chevron-right","fas fa-chevron-up","fas fa-child","fas fa-church","fas fa-circle-notch","fas fa-city","fas fa-clinic-medical","fas fa-clipboard-check","fas fa-clipboard-list","fas fa-cloud","fas fa-cloud-download-alt","fas fa-cloud-meatball","fas fa-cloud-moon","fas fa-cloud-moon-rain","fas fa-cloud-rain","fas fa-cloud-showers-heavy","fas fa-cloud-sun","fas fa-cloud-sun-rain","fas fa-cloud-upload-alt","fas fa-cocktail","fas fa-code","fas fa-code-branch","fas fa-coffee","fas fa-cog","fas fa-cogs","fas fa-coins","fas fa-columns","fas fa-comment-dollar","fas fa-comment-medical","fas fa-comment-slash","fas fa-comments-dollar","fas fa-compact-disc","fas fa-compress","fas fa-compress-alt","fas fa-compress-arrows-alt","fas fa-concierge-bell","fas fa-cookie","fas fa-cookie-bite","fas fa-couch","fas fa-crop","fas fa-crop-alt","fas fa-cross","fas fa-crosshairs","fas fa-crow","fas fa-crown","fas fa-crutch","fas fa-cube","fas fa-cubes","fas fa-cut","fas fa-database","fas fa-deaf","fas fa-democrat","fas fa-desktop","fas fa-dharmachakra","fas fa-diagnoses","fas fa-dice","fas fa-dice-d20","fas fa-dice-d6","fas fa-dice-five","fas fa-dice-four","fas fa-dice-one","fas fa-dice-six","fas fa-dice-three","fas fa-dice-two","fas fa-digital-tachograph","fas fa-directions","fas fa-disease","fas fa-divide","fas fa-dna","fas fa-dog","fas fa-dollar-sign","fas fa-dolly","fas fa-dolly-flatbed","fas fa-donate","fas fa-door-closed","fas fa-door-open","fas fa-dove","fas fa-download","fas fa-drafting-compass","fas fa-dragon","fas fa-draw-polygon","fas fa-drum","fas fa-drum-steelpan","fas fa-drumstick-bite","fas fa-dumbbell","fas fa-dumpster","fas fa-dumpster-fire","fas fa-dungeon","fas fa-egg","fas fa-eject","fas fa-ellipsis-h","fas fa-ellipsis-v","fas fa-envelope-open-text","fas fa-envelope-square","fas fa-equals","fas fa-eraser","fas fa-ethernet","fas fa-euro-sign","fas fa-exchange-alt","fas fa-exclamation","fas fa-exclamation-circle","fas fa-exclamation-triangle","fas fa-expand","fas fa-expand-alt","fas fa-expand-arrows-alt","fas fa-external-link-alt","fas fa-external-link-square-alt","fas fa-eye-dropper","fas fa-fan","fas fa-fast-backward","fas fa-fast-forward","fas fa-faucet","fas fa-fax","fas fa-feather","fas fa-feather-alt","fas fa-female","fas fa-fighter-jet","fas fa-file-contract","fas fa-file-csv","fas fa-file-download","fas fa-file-export","fas fa-file-import","fas fa-file-invoice","fas fa-file-invoice-dollar","fas fa-file-medical","fas fa-file-medical-alt","fas fa-file-prescription","fas fa-file-signature","fas fa-file-upload","fas fa-fill","fas fa-fill-drip","fas fa-film","fas fa-filter","fas fa-fingerprint","fas fa-fire","fas fa-fire-alt","fas fa-fire-extinguisher","fas fa-first-aid","fas fa-fish","fas fa-fist-raised","fas fa-flag-checkered","fas fa-flag-usa","fas fa-flask","fas fa-folder-minus","fas fa-folder-plus","fas fa-font","fas fa-football-ball","fas fa-forward","fas fa-frog","fas fa-funnel-dollar","fas fa-gamepad","fas fa-gas-pump","fas fa-gavel","fas fa-genderless","fas fa-ghost","fas fa-gift","fas fa-gifts","fas fa-glass-cheers","fas fa-glass-martini","fas fa-glass-martini-alt","fas fa-glass-whiskey","fas fa-glasses","fas fa-globe","fas fa-globe-africa","fas fa-globe-americas","fas fa-globe-asia","fas fa-globe-europe","fas fa-golf-ball","fas fa-gopuram","fas fa-graduation-cap","fas fa-greater-than","fas fa-greater-than-equal","fas fa-grip-horizontal","fas fa-grip-lines","fas fa-grip-lines-vertical","fas fa-grip-vertical","fas fa-guitar","fas fa-h-square","fas fa-hamburger","fas fa-hammer","fas fa-hamsa","fas fa-hand-holding","fas fa-hand-holding-heart","fas fa-hand-holding-medical","fas fa-hand-holding-usd","fas fa-hand-holding-water","fas fa-hand-middle-finger","fas fa-hand-sparkles","fas fa-hands","fas fa-hands-helping","fas fa-hands-wash","fas fa-handshake-alt-slash","fas fa-handshake-slash","fas fa-hanukiah","fas fa-hard-hat","fas fa-hashtag","fas fa-hat-cowboy","fas fa-hat-cowboy-side","fas fa-hat-wizard","fas fa-head-side-cough","fas fa-head-side-cough-slash","fas fa-head-side-mask","fas fa-head-side-virus","fas fa-heading","fas fa-headphones","fas fa-headphones-alt","fas fa-headset","fas fa-heart-broken","fas fa-heartbeat","fas fa-helicopter","fas fa-highlighter","fas fa-hiking","fas fa-hippo","fas fa-history","fas fa-hockey-puck","fas fa-holly-berry","fas fa-home","fas fa-horse","fas fa-horse-head","fas fa-hospital-alt","fas fa-hospital-symbol","fas fa-hospital-user","fas fa-hot-tub","fas fa-hotdog","fas fa-hotel","fas fa-hourglass-end","fas fa-hourglass-half","fas fa-hourglass-start","fas fa-house-damage","fas fa-house-user","fas fa-hryvnia","fas fa-i-cursor","fas fa-ice-cream","fas fa-icicles","fas fa-icons","fas fa-id-card-alt","fas fa-igloo","fas fa-inbox","fas fa-indent","fas fa-industry","fas fa-infinity","fas fa-info","fas fa-info-circle","fas fa-italic","fas fa-jedi","fas fa-joint","fas fa-journal-whills","fas fa-kaaba","fas fa-key","fas fa-khanda","fas fa-kiwi-bird","fas fa-landmark","fas fa-language","fas fa-laptop","fas fa-laptop-code","fas fa-laptop-house","fas fa-laptop-medical","fas fa-layer-group","fas fa-leaf","fas fa-less-than","fas fa-less-than-equal","fas fa-level-down-alt","fas fa-level-up-alt","fas fa-link","fas fa-lira-sign","fas fa-list","fas fa-list-ol","fas fa-list-ul","fas fa-location-arrow","fas fa-lock","fas fa-lock-open","fas fa-long-arrow-alt-down","fas fa-long-arrow-alt-left","fas fa-long-arrow-alt-right","fas fa-long-arrow-alt-up","fas fa-low-vision","fas fa-luggage-cart","fas fa-lungs","fas fa-lungs-virus","fas fa-magic","fas fa-magnet","fas fa-mail-bulk","fas fa-male","fas fa-map-marked","fas fa-map-marked-alt","fas fa-map-marker","fas fa-map-marker-alt","fas fa-map-pin","fas fa-map-signs","fas fa-marker","fas fa-mars","fas fa-mars-double","fas fa-mars-stroke","fas fa-mars-stroke-h","fas fa-mars-stroke-v","fas fa-mask","fas fa-medal","fas fa-medkit","fas fa-memory","fas fa-menorah","fas fa-mercury","fas fa-meteor","fas fa-microchip","fas fa-microphone","fas fa-microphone-alt","fas fa-microphone-alt-slash","fas fa-microphone-slash","fas fa-microscope","fas fa-minus","fas fa-minus-circle","fas fa-mitten","fas fa-mobile","fas fa-mobile-alt","fas fa-money-bill","fas fa-money-bill-wave","fas fa-money-bill-wave-alt","fas fa-money-check","fas fa-money-check-alt","fas fa-monument","fas fa-mortar-pestle","fas fa-mosque","fas fa-motorcycle","fas fa-mountain","fas fa-mouse","fas fa-mouse-pointer","fas fa-mug-hot","fas fa-music","fas fa-network-wired","fas fa-neuter","fas fa-not-equal","fas fa-notes-medical","fas fa-oil-can","fas fa-om","fas fa-otter","fas fa-outdent","fas fa-pager","fas fa-paint-brush","fas fa-paint-roller","fas fa-palette","fas fa-pallet","fas fa-paperclip","fas fa-parachute-box","fas fa-paragraph","fas fa-parking","fas fa-passport","fas fa-pastafarianism","fas fa-paste","fas fa-pause","fas fa-paw","fas fa-peace","fas fa-pen","fas fa-pen-alt","fas fa-pen-fancy","fas fa-pen-nib","fas fa-pen-square","fas fa-pencil-alt","fas fa-pencil-ruler","fas fa-people-arrows","fas fa-people-carry","fas fa-pepper-hot","fas fa-percent","fas fa-percentage","fas fa-person-booth","fas fa-phone","fas fa-phone-alt","fas fa-phone-slash","fas fa-phone-square","fas fa-phone-square-alt","fas fa-phone-volume","fas fa-photo-video","fas fa-piggy-bank","fas fa-pills","fas fa-pizza-slice","fas fa-place-of-worship","fas fa-plane","fas fa-plane-arrival","fas fa-plane-departure","fas fa-plane-slash","fas fa-play","fas fa-plug","fas fa-plus","fas fa-plus-circle","fas fa-podcast","fas fa-poll","fas fa-poll-h","fas fa-poo","fas fa-poo-storm","fas fa-poop","fas fa-portrait","fas fa-pound-sign","fas fa-power-off","fas fa-pray","fas fa-praying-hands","fas fa-prescription","fas fa-prescription-bottle","fas fa-prescription-bottle-alt","fas fa-print","fas fa-procedures","fas fa-project-diagram","fas fa-pump-medical","fas fa-pump-soap","fas fa-puzzle-piece","fas fa-qrcode","fas fa-question","fas fa-quidditch","fas fa-quote-left","fas fa-quote-right","fas fa-quran","fas fa-radiation","fas fa-radiation-alt","fas fa-rainbow","fas fa-random","fas fa-receipt","fas fa-record-vinyl","fas fa-recycle","fas fa-redo","fas fa-redo-alt","fas fa-remove-format","fas fa-reply","fas fa-reply-all","fas fa-republican","fas fa-restroom","fas fa-retweet","fas fa-ribbon","fas fa-ring","fas fa-road","fas fa-robot","fas fa-rocket","fas fa-route","fas fa-rss","fas fa-rss-square","fas fa-ruble-sign","fas fa-ruler","fas fa-ruler-combined","fas fa-ruler-horizontal","fas fa-ruler-vertical","fas fa-running","fas fa-rupee-sign","fas fa-satellite","fas fa-satellite-dish","fas fa-school","fas fa-screwdriver","fas fa-scroll","fas fa-sd-card","fas fa-search","fas fa-search-dollar","fas fa-search-location","fas fa-search-minus","fas fa-search-plus","fas fa-seedling","fas fa-server","fas fa-shapes","fas fa-share","fas fa-share-alt","fas fa-share-alt-square","fas fa-shekel-sign","fas fa-shield-alt","fas fa-shield-virus","fas fa-ship","fas fa-shipping-fast","fas fa-shoe-prints","fas fa-shopping-bag","fas fa-shopping-basket","fas fa-shopping-cart","fas fa-shower","fas fa-shuttle-van","fas fa-sign","fas fa-sign-in-alt","fas fa-sign-language","fas fa-sign-out-alt","fas fa-signal","fas fa-signature","fas fa-sim-card","fas fa-sink","fas fa-sitemap","fas fa-skating","fas fa-skiing","fas fa-skiing-nordic","fas fa-skull","fas fa-skull-crossbones","fas fa-slash","fas fa-sleigh","fas fa-sliders-h","fas fa-smog","fas fa-smoking","fas fa-smoking-ban","fas fa-sms","fas fa-snowboarding","fas fa-snowman","fas fa-snowplow","fas fa-soap","fas fa-socks","fas fa-solar-panel","fas fa-sort","fas fa-sort-alpha-down","fas fa-sort-alpha-down-alt","fas fa-sort-alpha-up","fas fa-sort-alpha-up-alt","fas fa-sort-amount-down","fas fa-sort-amount-down-alt","fas fa-sort-amount-up","fas fa-sort-amount-up-alt","fas fa-sort-down","fas fa-sort-numeric-down","fas fa-sort-numeric-down-alt","fas fa-sort-numeric-up","fas fa-sort-numeric-up-alt","fas fa-sort-up","fas fa-spa","fas fa-space-shuttle","fas fa-spell-check","fas fa-spider","fas fa-spinner","fas fa-splotch","fas fa-spray-can","fas fa-square-full","fas fa-square-root-alt","fas fa-stamp","fas fa-star-and-crescent","fas fa-star-half-alt","fas fa-star-of-david","fas fa-star-of-life","fas fa-step-backward","fas fa-step-forward","fas fa-stethoscope","fas fa-stop","fas fa-stopwatch","fas fa-stopwatch-20","fas fa-store","fas fa-store-alt","fas fa-store-alt-slash","fas fa-store-slash","fas fa-stream","fas fa-street-view","fas fa-strikethrough","fas fa-stroopwafel","fas fa-subscript","fas fa-subway","fas fa-suitcase","fas fa-suitcase-rolling","fas fa-superscript","fas fa-swatchbook","fas fa-swimmer","fas fa-swimming-pool","fas fa-synagogue","fas fa-sync","fas fa-sync-alt","fas fa-syringe","fas fa-table","fas fa-table-tennis","fas fa-tablet","fas fa-tablet-alt","fas fa-tablets","fas fa-tachometer-alt","fas fa-tag","fas fa-tags","fas fa-tape","fas fa-tasks","fas fa-taxi","fas fa-teeth","fas fa-teeth-open","fas fa-temperature-high","fas fa-temperature-low","fas fa-tenge","fas fa-terminal","fas fa-text-height","fas fa-text-width","fas fa-th","fas fa-th-large","fas fa-th-list","fas fa-theater-masks","fas fa-thermometer","fas fa-thermometer-empty","fas fa-thermometer-full","fas fa-thermometer-half","fas fa-thermometer-quarter","fas fa-thermometer-three-quarters","fas fa-thumbtack","fas fa-ticket-alt","fas fa-times","fas fa-tint","fas fa-tint-slash","fas fa-toggle-off","fas fa-toggle-on","fas fa-toilet","fas fa-toilet-paper","fas fa-toilet-paper-slash","fas fa-toolbox","fas fa-tools","fas fa-tooth","fas fa-torah","fas fa-torii-gate","fas fa-tractor","fas fa-trademark","fas fa-traffic-light","fas fa-trailer","fas fa-train","fas fa-tram","fas fa-transgender","fas fa-transgender-alt","fas fa-trash","fas fa-trash-restore","fas fa-trash-restore-alt","fas fa-tree","fas fa-trophy","fas fa-truck","fas fa-truck-loading","fas fa-truck-monster","fas fa-truck-moving","fas fa-truck-pickup","fas fa-tshirt","fas fa-tty","fas fa-tv","fas fa-umbrella","fas fa-umbrella-beach","fas fa-underline","fas fa-undo","fas fa-undo-alt","fas fa-universal-access","fas fa-university","fas fa-unlink","fas fa-unlock","fas fa-unlock-alt","fas fa-upload","fas fa-user-alt","fas fa-user-alt-slash","fas fa-user-astronaut","fas fa-user-check","fas fa-user-clock","fas fa-user-cog","fas fa-user-edit","fas fa-user-friends","fas fa-user-graduate","fas fa-user-injured","fas fa-user-lock","fas fa-user-md","fas fa-user-minus","fas fa-user-ninja","fas fa-user-nurse","fas fa-user-plus","fas fa-user-secret","fas fa-user-shield","fas fa-user-slash","fas fa-user-tag","fas fa-user-tie","fas fa-user-times","fas fa-users","fas fa-users-cog","fas fa-users-slash","fas fa-utensil-spoon","fas fa-utensils","fas fa-vector-square","fas fa-venus","fas fa-venus-double","fas fa-venus-mars","fas fa-vest","fas fa-vest-patches","fas fa-vial","fas fa-vials","fas fa-video","fas fa-video-slash","fas fa-vihara","fas fa-virus","fas fa-virus-slash","fas fa-viruses","fas fa-voicemail","fas fa-volleyball-ball","fas fa-volume-down","fas fa-volume-mute","fas fa-volume-off","fas fa-volume-up","fas fa-vote-yea","fas fa-vr-cardboard","fas fa-walking","fas fa-wallet","fas fa-warehouse","fas fa-water","fas fa-wave-square","fas fa-weight","fas fa-weight-hanging","fas fa-wheelchair","fas fa-wifi","fas fa-wind","fas fa-wine-bottle","fas fa-wine-glass","fas fa-wine-glass-alt","fas fa-won-sign","fas fa-wrench","fas fa-x-ray","fas fa-yen-sign","fas fa-yin-yang"];
+        fontAwesomeListBrands = ["fab fa-500px","fab fa-accessible-icon","fab fa-accusoft","fab fa-acquisitions-incorporated","fab fa-adn","fab fa-adversal","fab fa-affiliatetheme","fab fa-airbnb","fab fa-algolia","fab fa-alipay","fab fa-amazon","fab fa-amazon-pay","fab fa-amilia","fab fa-android","fab fa-angellist","fab fa-angrycreative","fab fa-angular","fab fa-app-store","fab fa-app-store-ios","fab fa-apper","fab fa-apple","fab fa-apple-pay","fab fa-artstation","fab fa-asymmetrik","fab fa-atlassian","fab fa-audible","fab fa-autoprefixer","fab fa-avianex","fab fa-aviato","fab fa-aws","fab fa-bandcamp","fab fa-battle-net","fab fa-behance","fab fa-behance-square","fab fa-bimobject","fab fa-bitbucket","fab fa-bitcoin","fab fa-bity","fab fa-black-tie","fab fa-blackberry","fab fa-blogger","fab fa-blogger-b","fab fa-bluetooth","fab fa-bluetooth-b","fab fa-bootstrap","fab fa-btc","fab fa-buffer","fab fa-buromobelexperte","fab fa-buy-n-large","fab fa-buysellads","fab fa-canadian-maple-leaf","fab fa-cc-amazon-pay","fab fa-cc-amex","fab fa-cc-apple-pay","fab fa-cc-diners-club","fab fa-cc-discover","fab fa-cc-jcb","fab fa-cc-mastercard","fab fa-cc-paypal","fab fa-cc-stripe","fab fa-cc-visa","fab fa-centercode","fab fa-centos","fab fa-chrome","fab fa-chromecast","fab fa-cloudflare","fab fa-cloudscale","fab fa-cloudsmith","fab fa-cloudversify","fab fa-codepen","fab fa-codiepie","fab fa-confluence","fab fa-connectdevelop","fab fa-contao","fab fa-cotton-bureau","fab fa-cpanel","fab fa-creative-commons","fab fa-creative-commons-by","fab fa-creative-commons-nc","fab fa-creative-commons-nc-eu","fab fa-creative-commons-nc-jp","fab fa-creative-commons-nd","fab fa-creative-commons-pd","fab fa-creative-commons-pd-alt","fab fa-creative-commons-remix","fab fa-creative-commons-sa","fab fa-creative-commons-sampling","fab fa-creative-commons-sampling-plus","fab fa-creative-commons-share","fab fa-creative-commons-zero","fab fa-critical-role","fab fa-css3","fab fa-css3-alt","fab fa-cuttlefish","fab fa-d-and-d","fab fa-d-and-d-beyond","fab fa-dailymotion","fab fa-dashcube","fab fa-deezer","fab fa-delicious","fab fa-deploydog","fab fa-deskpro","fab fa-dev","fab fa-deviantart","fab fa-dhl","fab fa-diaspora","fab fa-digg","fab fa-digital-ocean","fab fa-discord","fab fa-discourse","fab fa-dochub","fab fa-docker","fab fa-draft2digital","fab fa-dribbble","fab fa-dribbble-square","fab fa-dropbox","fab fa-drupal","fab fa-dyalog","fab fa-earlybirds","fab fa-ebay","fab fa-edge","fab fa-edge-legacy","fab fa-elementor","fab fa-ello","fab fa-ember","fab fa-empire","fab fa-envira","fab fa-erlang","fab fa-ethereum","fab fa-etsy","fab fa-evernote","fab fa-expeditedssl","fab fa-facebook","fab fa-facebook-f","fab fa-facebook-messenger","fab fa-facebook-square","fab fa-fantasy-flight-games","fab fa-fedex","fab fa-fedora","fab fa-figma","fab fa-firefox","fab fa-firefox-browser","fab fa-first-order","fab fa-first-order-alt","fab fa-firstdraft","fab fa-flickr","fab fa-flipboard","fab fa-fly","fab fa-font-awesome","fab fa-font-awesome-alt","fab fa-font-awesome-flag","fab fa-fonticons","fab fa-fonticons-fi","fab fa-fort-awesome","fab fa-fort-awesome-alt","fab fa-forumbee","fab fa-foursquare","fab fa-free-code-camp","fab fa-freebsd","fab fa-fulcrum","fab fa-galactic-republic","fab fa-galactic-senate","fab fa-get-pocket","fab fa-gg","fab fa-gg-circle","fab fa-git","fab fa-git-alt","fab fa-git-square","fab fa-github","fab fa-github-alt","fab fa-github-square","fab fa-gitkraken","fab fa-gitlab","fab fa-gitter","fab fa-glide","fab fa-glide-g","fab fa-gofore","fab fa-goodreads","fab fa-goodreads-g","fab fa-google","fab fa-google-drive","fab fa-google-pay","fab fa-google-play","fab fa-google-plus","fab fa-google-plus-g","fab fa-google-plus-square","fab fa-google-wallet","fab fa-gratipay","fab fa-grav","fab fa-gripfire","fab fa-grunt","fab fa-guilded","fab fa-gulp","fab fa-hacker-news","fab fa-hacker-news-square","fab fa-hackerrank","fab fa-hips","fab fa-hire-a-helper","fab fa-hive","fab fa-hooli","fab fa-hornbill","fab fa-hotjar","fab fa-houzz","fab fa-html5","fab fa-hubspot","fab fa-ideal","fab fa-imdb","fab fa-innosoft","fab fa-instagram","fab fa-instagram-square","fab fa-instalod","fab fa-intercom","fab fa-internet-explorer","fab fa-invision","fab fa-ioxhost","fab fa-itch-io","fab fa-itunes","fab fa-itunes-note","fab fa-java","fab fa-jedi-order","fab fa-jenkins","fab fa-jira","fab fa-joget","fab fa-joomla","fab fa-js","fab fa-js-square","fab fa-jsfiddle","fab fa-kaggle","fab fa-keybase","fab fa-keycdn","fab fa-kickstarter","fab fa-kickstarter-k","fab fa-korvue","fab fa-laravel","fab fa-lastfm","fab fa-lastfm-square","fab fa-leanpub","fab fa-less","fab fa-line","fab fa-linkedin","fab fa-linkedin-in","fab fa-linode","fab fa-linux","fab fa-lyft","fab fa-magento","fab fa-mailchimp","fab fa-mandalorian","fab fa-markdown","fab fa-mastodon","fab fa-maxcdn","fab fa-mdb","fab fa-medapps","fab fa-medium","fab fa-medium-m","fab fa-medrt","fab fa-meetup","fab fa-megaport","fab fa-mendeley","fab fa-microblog","fab fa-microsoft","fab fa-mix","fab fa-mixcloud","fab fa-mixer","fab fa-mizuni","fab fa-modx","fab fa-monero","fab fa-napster","fab fa-neos","fab fa-nimblr","fab fa-node","fab fa-node-js","fab fa-npm","fab fa-ns8","fab fa-nutritionix","fab fa-octopus-deploy","fab fa-odnoklassniki","fab fa-odnoklassniki-square","fab fa-old-republic","fab fa-opencart","fab fa-openid","fab fa-opera","fab fa-optin-monster","fab fa-orcid","fab fa-osi","fab fa-page4","fab fa-pagelines","fab fa-palfed","fab fa-patreon","fab fa-paypal","fab fa-penny-arcade","fab fa-perbyte","fab fa-periscope","fab fa-phabricator","fab fa-phoenix-framework","fab fa-phoenix-squadron","fab fa-php","fab fa-pied-piper","fab fa-pied-piper-alt","fab fa-pied-piper-hat","fab fa-pied-piper-pp","fab fa-pied-piper-square","fab fa-pinterest","fab fa-pinterest-p","fab fa-pinterest-square","fab fa-playstation","fab fa-product-hunt","fab fa-pushed","fab fa-python","fab fa-qq","fab fa-quinscape","fab fa-quora","fab fa-r-project","fab fa-raspberry-pi","fab fa-ravelry","fab fa-react","fab fa-reacteurope","fab fa-readme","fab fa-rebel","fab fa-red-river","fab fa-reddit","fab fa-reddit-alien","fab fa-reddit-square","fab fa-redhat","fab fa-renren","fab fa-replyd","fab fa-researchgate","fab fa-resolving","fab fa-rev","fab fa-rocketchat","fab fa-rockrms","fab fa-rust","fab fa-safari","fab fa-salesforce","fab fa-sass","fab fa-schlix","fab fa-scribd","fab fa-searchengin","fab fa-sellcast","fab fa-sellsy","fab fa-servicestack","fab fa-shirtsinbulk","fab fa-shopify","fab fa-shopware","fab fa-simplybuilt","fab fa-sistrix","fab fa-sith","fab fa-sketch","fab fa-skyatlas","fab fa-skype","fab fa-slack","fab fa-slack-hash","fab fa-slideshare","fab fa-snapchat","fab fa-snapchat-ghost","fab fa-snapchat-square","fab fa-soundcloud","fab fa-sourcetree","fab fa-speakap","fab fa-speaker-deck","fab fa-spotify","fab fa-squarespace","fab fa-stack-exchange","fab fa-stack-overflow","fab fa-stackpath","fab fa-staylinked","fab fa-steam","fab fa-steam-square","fab fa-steam-symbol","fab fa-sticker-mule","fab fa-strava","fab fa-stripe","fab fa-stripe-s","fab fa-studiovinari","fab fa-stumbleupon","fab fa-stumbleupon-circle","fab fa-superpowers","fab fa-supple","fab fa-suse","fab fa-swift","fab fa-symfony","fab fa-teamspeak","fab fa-telegram","fab fa-telegram-plane","fab fa-tencent-weibo","fab fa-the-red-yeti","fab fa-themeco","fab fa-themeisle","fab fa-think-peaks","fab fa-tiktok","fab fa-trade-federation","fab fa-trello","fab fa-tumblr","fab fa-tumblr-square","fab fa-twitch","fab fa-twitter","fab fa-twitter-square","fab fa-typo3","fab fa-uber","fab fa-ubuntu","fab fa-uikit","fab fa-umbraco","fab fa-uncharted","fab fa-uniregistry","fab fa-unity","fab fa-unsplash","fab fa-untappd","fab fa-ups","fab fa-usb","fab fa-usps","fab fa-ussunnah","fab fa-vaadin","fab fa-viacoin","fab fa-viadeo","fab fa-viadeo-square","fab fa-viber","fab fa-vimeo","fab fa-vimeo-square","fab fa-vimeo-v","fab fa-vine","fab fa-vk","fab fa-vnv","fab fa-vuejs","fab fa-watchman-monitoring","fab fa-waze","fab fa-weebly","fab fa-weibo","fab fa-weixin","fab fa-whatsapp","fab fa-whatsapp-square","fab fa-whmcs","fab fa-wikipedia-w","fab fa-windows","fab fa-wix","fab fa-wizards-of-the-coast","fab fa-wodu","fab fa-wolf-pack-battalion","fab fa-wordpress","fab fa-wordpress-simple","fab fa-wpbeginner","fab fa-wpexplorer","fab fa-wpforms","fab fa-wpressr","fab fa-xbox","fab fa-xing","fab fa-xing-square","fab fa-y-combinator","fab fa-yahoo","fab fa-yammer","fab fa-yandex","fab fa-yandex-international","fab fa-yarn","fab fa-yelp","fab fa-yoast","fab fa-youtube","fab fa-youtube-square","fab fa-zhihu"];
+    }
+</script>
+</html>
